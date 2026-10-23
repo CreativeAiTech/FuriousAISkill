@@ -1,25 +1,31 @@
-# ~/.agents: global AI skills & rules (single source of truth)
+# FuriousAISkill: global AI skills & rules (single source of truth)
 
-## Install on a new machine
+This repo (`git@github.com:CreativeAiTech/FuriousAISkill.git`) is the agent kit. It is cloned to `~/.agents`.
+
+## Install
 
 ```
-git clone <your-private-repo-url> ~/.agents
+git clone git@github.com:CreativeAiTech/FuriousAISkill.git ~/.agents
 node ~/.agents/sync.mjs
 ```
 
-In a project wired for it (e.g. Etherium), `yarn install` does this automatically: it clones the kit from `package.json` → `agentKit.repo` if `~/.agents` is missing, fast-forwards it when it has no local edits, then runs the sync. Override with `AGENT_KIT_REPO` / `AGENT_KIT_HOME`; skipped when `CI` is set.
+Etherium's `yarn install` does this automatically (clone if missing, fast-forward when clean, then sync).
 
-Edit files here only, then run `node ~/.agents/sync.mjs`. It copies them into every tool:
+`sync.mjs` copies the kit into every tool:
 
 | Source | Claude Code | Antigravity |
 | :--- | :--- | :--- |
 | `skills/<name>/` | `~/.claude/skills/<name>/` | `~/.gemini/config/skills/<name>/` |
 | `rules/*.md` (always on) | managed block in `~/.claude/CLAUDE.md` | `~/.gemini/config/rules/<file>` |
-| `agents/*.md` (subagents, pinned models) | `~/.claude/agents/<file>` | — (uses its built-in subagents) |
-| `hooks/claude-hooks.json` (hook manifest) | `hooks` in `~/.claude/settings.json` (managed entries only) | — |
+| `agents/*.md` (subagents, pinned models) | `~/.claude/agents/<file>` | none (uses its built-in subagents) |
+| `hooks/claude-hooks.json` (hook manifest) | `hooks` in `~/.claude/settings.json` (managed entries only) | none |
 
 Generated copies are marked. Sync removes stale generated copies and never touches hand-written files.
 Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.agents/skills/`), and project rules win.
+
+## Updating
+
+Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other machines pick it up on the next `yarn install`.
 
 | Item | Owns |
 | :--- | :--- |
@@ -27,7 +33,6 @@ Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.age
 | `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, delegation, task specs, cross-tool handoff, Grok banners, token audits |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 
-Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It now lives in `hooks/context-watch.js` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
-`_retired/` holds the pre-consolidation copies (including the old `context-optimizer` skill, now merged into model-orchestrator and the rule). It is gitignored local backup.
+Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It lives in `hooks/context-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
 
-Copies on claude.ai (Settings → Capabilities → Skills) can't be synced from here. Re-upload `skills/<name>` after you edit it.
+Copies on claude.ai (Settings, Capabilities, Skills) can't be synced from here. Re-upload `skills/<name>` after you edit it.

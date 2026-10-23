@@ -1,8 +1,8 @@
 {
   "UserPromptSubmit": [
-    { "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/context-watch.js\"", "timeout": 10 }] }
+    { "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/context-watch.cjs\"", "timeout": 10 }] }
   ],
   "SessionStart": [
-    { "matcher": "startup|clear|compact", "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/context-watch.js\"", "timeout": 10 }] }
+    { "matcher": "startup|clear|compact", "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/context-watch.cjs\"", "timeout": 10 }] }
   ]
 }
