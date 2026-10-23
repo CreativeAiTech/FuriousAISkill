@@ -16,9 +16,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const HOME = os.homedir();
-const SRC = path.join(HOME, ".agents");
+const SRC = path.dirname(fileURLToPath(import.meta.url)); // the kit folder itself (normally ~/.agents)
 const SRC_SKILLS = path.join(SRC, "skills");
 const SRC_RULES = path.join(SRC, "rules");
 const SKILL_TARGETS = [path.join(HOME, ".claude", "skills"), path.join(HOME, ".gemini", "config", "skills")];

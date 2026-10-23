@@ -7,7 +7,7 @@ git clone <your-private-repo-url> ~/.agents
 node ~/.agents/sync.mjs
 ```
 
-Etherium's `yarn install` also runs this automatically when `~/.agents` exists.
+In a project wired for it (e.g. Etherium), `yarn install` does this automatically: it clones the kit from `package.json` → `agentKit.repo` if `~/.agents` is missing, fast-forwards it when it has no local edits, then runs the sync. Override with `AGENT_KIT_REPO` / `AGENT_KIT_HOME`; skipped when `CI` is set.
 
 Edit files here only, then run `node ~/.agents/sync.mjs`. It copies them into every tool:
 
