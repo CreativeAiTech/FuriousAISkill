@@ -61,17 +61,37 @@ Use the smallest model that can do the job reliably.
 
 If a worker returns something wrong twice, move that task up one tier rather than retrying at the same tier.
 
-**Escalate straight to the top tier** (skip the ladder) when any of these hold:
+### Minimum tier: hard work goes straight to the top (skip the ladder)
+
+The top tier (Opus / Pro class, at high effort) is the **minimum** for any of these:
 - an architecture or design decision, or one that's costly to reverse (data model, save format, engine/combat core, public API)
 - a bug whose cause is still unknown after one real attempt, or the same error twice
 - you're stuck: going in circles, conflicting constraints, or no confident approach
 - security, data-loss, or money risk
+- any area the project's rules mark as top-tier (e.g. a "Minimum tier" table in AGENTS.md)
 
-How, per tool:
-- **Claude Code**: the brain (Opus) does it inline, or spawns a subagent with `model: "opus"` and `effort: "max"` for a contained hard sub-problem. If the main session isn't on Opus, stop and ask the user to switch (model picker or `/model`) rather than push on with a weaker model.
-- **Antigravity**: switch to the strongest model in the picker (Pro class) for that task, or route it to `@claude`.
+**Know what you're running on.** Your system prompt names your model; trust that, not your assumption. Re-check before each top-tier decision, not only at session start: Claude Code can switch from Opus to Sonnet when Opus usage runs out, and a failed Opus subagent call must never turn into "I'll just do it myself." Opus at low effort isn't top tier for hard work either: raise the session's effort, or ask the user to.
 
-Once the hard part is solved and written as a spec, hand implementation back down to Mid/Small workers. Escalation buys judgment, not volume.
+**Decide high, execute low, never guess.** A decision is made by the top tier and *written down*; everything below only relays and executes it.
+
+| You are… | Do this |
+| :--- | :--- |
+| At or above the minimum tier | Decide, write it down, hand execution down to Mid/Small workers |
+| Below it, and the top tier is reachable | Escalate: Claude Code → subagent with `model: "opus"`, `effort: "max"` for a contained question (ask the user first if it's large, like a whole architecture, since it spends shared quota); Antigravity → Pro-class model in the picker, or route to `@claude`. Show a one-line banner: `▲ Escalated to <model>: <why>` |
+| Below it, top tier unreachable (out of quota, fallback, call failed), decision **hard to reverse** | **Stop.** Tell the user plainly: "This needs top-tier judgment and it isn't available. Wait for the quota reset or switch models." Queue a self-contained `@claude` (or top-tier) backlog item so nobody has to relay it. Produce no answer to the decision |
+| Below it, top tier unreachable, decision **reversible** | Offer **draft mode** (below). Only proceed if the user agrees |
+| The user says "do it anyway" | Draft mode, and log the override in the draft header |
+
+**Write the decision down** (the top tier does this, not its caller): a decision note in the project's decisions folder if it has one (e.g. `.agents/decisions/YYYY-MM-DD-<slug>.md`), else in the backlog item or `CONTEXT.md`. Contents: **Decided by** (model), **Context**, **Decision**, **Why**, **Rejected options**, **Spec / Done when**, **Open questions**.
+
+**Relaying is not deciding.** A lower tier that receives a top-tier result links to it or quotes its conclusion verbatim. It doesn't paraphrase it, "improve" it, or fill gaps with its own judgment. If execution hits a fork the decision didn't cover, stop and escalate again.
+
+**Draft mode** (below-tier work the user accepts): start the output with
+> **DRAFT, below required tier.** Made by `<model>`; needs `<tier>` because `<trigger>`. Confidence: `<low|medium>`. Unknowns: `<list>`. Review queued: `<item id>`.
+
+Commit nothing irreversible (no save-format, schema, payment or security changes land), and queue a top-tier review item that names the draft.
+
+Once the hard part is decided and written as a spec, hand implementation back down to Mid/Small workers. Escalation buys judgment, not volume.
 
 **Grok models**: let the bridge auto-select (`model: "auto"`); pass one only if the user names it.
 
@@ -105,7 +125,7 @@ Agents don't share chat memory, so work crosses through the repo.
 | Anything needs art | `@gemini` item with the exact prompt or pipeline command |
 | Grok returns content | The calling agent writes it into the repo, then logs it |
 | Grok fails or runs out of budget | Finish natively with what came back; handle and delete any relay snapshot the bridge left |
-| Quota or Claude window runs out mid-task | Write the handoff first, then the user says "continue" in the next tool. Spend free or flat-rate quotas before pay-per-token credits |
+| Quota or Claude window runs out mid-task | Write the handoff first, then the user says "continue" in the next tool. Spend free or flat-rate quotas before pay-per-token credits. If what's left is top-tier work, the next tool follows Step 4's minimum tier: it doesn't finish the decision on a smaller model |
 
 ## Step 8: Grok pre-flight & banners
 
