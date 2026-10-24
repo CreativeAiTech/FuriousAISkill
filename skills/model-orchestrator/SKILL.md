@@ -20,16 +20,28 @@ Project rules win over this generic skill. Check AGENTS.md / CLAUDE.md for:
 | :--- | :--- | :--- | :--- |
 | **Gemini (Antigravity native)** `@gemini` | Included, high quota | Routine edits, single-file features, data/JSON content, docs, tests, git, pipeline runs, **all image generation** | Subtle cross-module refactors with no review |
 | **Claude Code (Pro plan)** `@claude` | **5-hour usage windows**, so only high-leverage work | Architecture and design, hard bugs in core math or state logic, multi-file refactors, **reviewing Gemini's risky diffs**, splitting big features into bounded tasks | Bulk edits, asset tweaks, anything Gemini does in one pass, **images (Claude can't)** |
-| **xAI Grok (MCP)** `@grok` | Paid per token, tracked budget | Witty/sarcastic dialogue, banter, divergent brainstorming, irreverent second opinions | Code edits (no repo access), anything with secrets |
+| **xAI Grok (MCP)** `@grok` | Paid per token, but cents per call at game-content scale; monthly USD budget | Dialogue, barks, flavor text, names, lore, divergent brainstorming, math and code second opinions | Code edits (no repo access), anything with secrets, **deciding** top-tier work (Step 4) |
 | **User** `@user` | — | Secrets and key rotation, taste calls, approvals, account actions | Work an agent can do |
 
-Quick rules, first match wins:
-1. **Needs an image?** → `@gemini` (or `@user` if its image quota is exhausted).
-2. **Wit, humor, or "10 wild ideas"?** → `@grok` if a Grok MCP tool is connected in this project, else do it natively.
-3. **A wrong answer would silently corrupt math, transforms, or saved data, or it spans 4+ files?** → `@claude` (or Gemini implements and Claude reviews).
-4. **Everything else** → `@gemini`.
+**Spend the cheapest resource that does the job well.** Scarcity order, scarcest first: the Claude window → Gemini quota → Grok dollars (cents per call). So Claude only does what nobody else does as well (judgment), Gemini carries the volume, and Grok takes every creative and second-opinion job it's good at. When a Grok upgrade (flagship or reasoning model) does a job clearly better, use it: it still costs cents, far less than the Claude window it saves.
 
-Paid Grok tokens go only to an explicit user request ("ask Grok"), persona/wit writing, or divergent brainstorming. Never routine code or questions.
+**Task → agent** (first match wins; the user never has to pick):
+
+| Task | Agent · model |
+| :--- | :--- |
+| Images, art, pet pipeline stages | `@gemini` (or `@user` if its image quota is out) |
+| Top-tier decision (Step 4), hard or unexplained bug, risky-diff review, splitting a feature into specs | `@claude` · Opus |
+| Code in a top-tier area | Gemini or a Claude worker implements from a written decision; `@claude` reviews |
+| Routine code, single-file features, JSON content, docs, tests, git, pipeline runs | `@gemini` · Flash (Pro for subtle edits) |
+| Bulk mechanical edits from a spec | `@gemini`, or a Sonnet `worker` if you're already in a Claude session |
+| Barks, taunts, NPC and rogue dialogue, item flavor text, names | `@grok` · `auto` (non-reasoning) |
+| Brainstorm 10+ creatures, skills, mechanics | `@grok` · `auto`; curate; Claude decides if it touches a top-tier system |
+| Lore, quest chains, long narrative arcs, world-building | `@grok` · flagship (`grok-4.7` class) |
+| Balance-formula or game-math sanity check | `@grok` · reasoning, as a cheap pre-check before Claude decides |
+| Outside critique of a risky code diff | `@grok` · `grok_review_code`, as a second opinion; Claude decides |
+| Secrets, taste calls, approvals, account actions | `@user` |
+
+**`@grok` items are run by whichever agent is active** (Grok has no repo access and never picks up work): call the Grok MCP (or the project's CLI fallback), curate the output, write it into the repo yourself, log it. If no Grok tool is connected, do it natively. Never spend Grok on routine code or questions you can answer directly.
 
 ## Step 2: The lifecycle (non-trivial work only)
 
@@ -132,15 +144,15 @@ Agents don't share chat memory, so work crosses through the repo.
 ## Step 8: Grok pre-flight & banners
 
 1. **Available?** A Grok MCP tool must be connected with a key configured. If not, do the task natively without fuss.
-2. **Budget**: call the bridge's budget tool (e.g. `grok_get_budget`). At 200 tokens or fewer, do it natively.
+2. **Budget**: call the bridge's budget tool (e.g. `grok_get_budget`) once per batch of calls. Under 10% of the monthly budget left → only explicit user requests; nothing left → do it natively.
 3. **Before dispatching**, show:
    > 🔄 **[AI Subagent Dispatch: xAI Grok <model>]**
    > • **Task**: `<task description>`
-   > • **Budget Remaining**: `X / Y tokens`
+   > • **Budget Remaining**: `$X / $Y`
 4. **Afterwards**, show:
    > ✅ **[AI Subagent Complete: xAI Grok <model>]**
-   > • **Tokens Consumed**: `N tokens`
-   > • **Updated Budget Remaining**: `X - N / Y tokens`
+   > • **Consumed**: `N tokens ($cost)`
+   > • **Updated Budget Remaining**: `$X / $Y`
 
 Banners apply **only to Grok** (the paid external call). The agent runs all commands; the user never does.
 
