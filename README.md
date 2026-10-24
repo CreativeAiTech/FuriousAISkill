@@ -84,4 +84,4 @@ plus Gemini in Antigravity and Grok. Tested in daily use on their game project.
 
 MIT, see [LICENSE](LICENSE). Free to use, change and share.
 
-If this saved you time, you can buy me a coffee: https://paypal.me/thealexseven
+If this saved you time, you can [buy me a coffee ☕](https://paypal.me/thealexseven).
