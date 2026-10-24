@@ -60,6 +60,12 @@ Change one lever per release where possible, so a result can be pinned to its ca
 - Waste past soft per session down vs $0.30 (1.0.0).
 - Lag misses (crossed HARD with no hard note) will remain: that is 1.2.0's lever.
 
+**Measured (2026-10-24, `contextAudit.mjs --days 7`, 13 Crownspire sessions)**
+- 1.0.0 re-measured on 11 sessions: 5 nudged, acted 40%, median 4.5 turns to checkpoint, $0.33/session, 2 lag misses (matches the baseline above).
+- 1.1.x so far: only 2 sessions (1.1.1, 1.3.0), both nudged and both acted on, 2 turns to checkpoint, 0 lag misses. Waste $2.25 (153 calls in 6 turns, ~25 calls/turn) and $0.09. n=2: directionally good, not statistically meaningful. Since 1.1.0 is only a few hours old on a single day, most sessions in the window still ran 1.0.0.
+- Residual risk: heavy turns still dominate cost. The 1.1.1 session paid $2.25 despite a fast response because soft (turn 3) to hard (turn 5) growth happened inside very long turns.
+- **1.2.0 verdict (recommendation only):** not yet. Lag misses are 0/2 on 1.1.x, and the nudge reaches the user within 2 turns. Mid-turn detection only pays for sessions with 25+ calls per turn; re-audit after about 10 sessions on 1.1.x (a few more days). Build 1.2.0 only if lag misses or waste above $1/session recur there.
+
 **Next candidate (1.2.0):** mid-turn detection (PostToolUse or Stop check on context growth, tail-reading the transcript), only after 1.1.0 has been measured.
 
 ## 1.0.0 · 2026-10-23 · baseline
