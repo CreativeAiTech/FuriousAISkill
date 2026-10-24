@@ -57,6 +57,8 @@ Only trivial work (answer already in context, ≤2 quick tool calls, a one-line 
 
 Delegation is the default (global rule "Orchestrator-first"). The only exception is trivial work, where a cold subagent spawn (~15-20k tokens of setup) costs more than the task.
 
+**Only delegate down a price tier** (Haiku/Sonnet under Opus, Flash-Lite under Flash, Flash under Pro). A same-tier worker costs more than inline; use one only to isolate a big messy task. Cap it: tight spec, line-range reads, report back after ~30 tool calls.
+
 Delegate to a worker when the task is repetitive or high volume, mechanical (renames, formatting, boilerplate, moving code), well specified (you can state what "done" looks like), low risk, or a search/summarize job.
 
 Keep on the brain: architecture or design, debugging with an unknown cause, ambiguous requirements, security or data loss risk, and the final review.
@@ -159,7 +161,7 @@ Banners apply **only to Grok** (the paid external call). The agent runs all comm
 ## How to run this in each environment
 
 - **Claude Code**: the main session is the brain. `Explore` agent for wide read-only searches, the global `worker` agent (sonnet) for edits from a spec, and the `verifier` agent (haiku) for checks. Pass `model: "haiku"` to Explore. Only trivial work stays inline.
-- **Antigravity**: its subagents (`research` / `flash_lite` for investigate and verify, `flash` or `pro` for implement), or switch the model dropdown per task.
+- **Antigravity**: `research` on `flash_lite` for investigate and verify (never on Flash). Implement inline when the main session is Flash; spawn a `flash` worker only under a Pro main, or to isolate a big messy task. Or switch the model dropdown per task.
 - **Claude app or any plain chat**: no automatic delegation. Output task specs as copy-paste blocks; the user runs them in a cheaper model and pastes results back for review.
 
 ## Output when the user asks for a plan or a token audit

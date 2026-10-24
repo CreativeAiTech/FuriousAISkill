@@ -505,7 +505,9 @@ if (agFiles.length) {
       for (const t of sub.turns) carried += mainCtx + Math.max(0, t.ctx - firstCtx);
 
       const mainReadPrice = pMain.in * GEMINI_CACHE_READ / 1e6;
-      const inline = carried * mainReadPrice + (totalOut + G) * (pMain.in / 1e6) + G * mainReadPrice * 5;
+      // Spawn position is unknown: assume mid-session (as for mainCtx), so half the parent's turns remain.
+      const remaining = parent ? Math.floor(parent.turns.length / 2) : 5;
+      const inline = carried * mainReadPrice + (totalOut + G) * (pMain.in / 1e6) + G * mainReadPrice * remaining;
       ag.spawns.push({
         session: sub.id.slice(0, 8),
         type: sub.type,
@@ -568,7 +570,7 @@ else {
     L.push(`| Subagent / model | Spawns | Actual $ | Inline est. $ | Savings $ |`, `| :-- | --: | --: | --: | --: |`);
     for (const [k, v] of Object.entries(agBy)) L.push(`| ${k} | ${v.n} | ${usd(v.a)} | ${usd(v.i)} | ${usd(v.i - v.a)} |`);
     L.push(`| **total** | **${ag.spawns.length}** | | | **${usd(ag.delegationSavings)}** |`, "");
-    L.push(`Inline estimate = what the same work would cost in the main session at its model price. Lightweight read-only subagents (\`research\` on flash-lite) yield strong savings; \`self\` worker spawns on heavy models cost more than inline when context is re-read.`, "");
+    L.push(`Inline estimate = what the same work would cost in the main session at its model price. Spawns save only when the worker runs on a cheaper tier than the main session (e.g. \`research\` on flash-lite); same-tier workers pay a cold start plus their own growing context.${ag.spawns.length < 30 ? ` Small sample (${ag.spawns.length} runs, estimated list prices): treat as a direction, not a verdict.` : ""}`, "");
   }
 }
 

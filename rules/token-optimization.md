@@ -19,11 +19,12 @@ The main session is the **brain**: it classifies, plans, writes specs and review
 - **Decide high, execute low, never guess.** Below the required tier, escalate: Claude Code → subagent with `model: "opus"`, `effort: "max"` (ask first unless it's a contained question; it spends shared quota); Antigravity → the Pro-class model, or `@claude`. The top model writes the decision down (decision note or spec); lower tiers link or quote it and carry it out, never re-decide. A new decision point mid-execution → escalate again.
 - **Can't escalate** (top tier unavailable, out of quota, call failed)? Never decide below tier. Hard to reverse → stop, tell the user to wait for the reset or switch models, queue it for a top-tier agent. Reversible → offer a labeled **DRAFT** (your model, "below required tier", confidence, unknowns), commit nothing irreversible, queue a top-tier review. Same when the user says "do it anyway". Details: `model-orchestrator` Step 4.
 - The user never names a model: pick the smallest that does the job well.
+- **Delegate only to a cheaper tier.** A worker on the main session's price tier can't save money: it adds a cold start and grows its own context (measured 2026-10: Flash `self` workers under a Flash main cost +25% vs inline, Flash-Lite `research` saved 80%). Same tier → inline, unless a big messy task needs context isolation. Every spawn gets a tight spec, line-range reads, and a stop point (report back after ~30 tool calls).
 
 | Tool | Small (collect, verify) | Mid (implement) | Brain |
 | :--- | :--- | :--- | :--- |
 | Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session (opus) |
-| Antigravity | `research` / `flash_lite` | `flash` (`pro` for subtle edits) | main session |
+| Antigravity | `research` / `flash_lite` (never Flash) | inline when main is Flash; `flash` worker only under a Pro main | main session |
 
 Agent choice across tools, task specs, handoff: `model-orchestrator`.
 
