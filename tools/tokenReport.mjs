@@ -140,7 +140,7 @@ function agentFrontmatterModel(type) {
 function turnFromLine(e) {
   const m = e.message;
   if (!m || !m.usage) return null;
-  return { id: m.id, model: m.model || "", usage: m.usage, ctx: ctxOf(m.usage) };
+  return { id: m.id, model: m.model || "", usage: m.usage, ctx: ctxOf(m.usage), ts: Date.parse(e.timestamp) || 0 };
 }
 
 function parseSession(s) {
@@ -259,9 +259,10 @@ function addSpend(scope, model, u) {
 
 // ---------- delegation ----------
 const spawnRows = [];
+const ccEvents = []; // {ts, model, usage} for every counted main + subagent turn (peak windows)
 let totalSpawns = 0, baseMain = 0; // baseMain: all main turns repriced at the baseline family
 for (const s of sessions) {
-  for (const t of s.turns) { addSpend("main", t.model, t.usage); baseMain += costOf(baseFam, t.usage); }
+  for (const t of s.turns) { if (t.ts) ccEvents.push(t); addSpend("main", t.model, t.usage); baseMain += costOf(baseFam, t.usage); }
   for (const sp of s.spawns) {
     totalSpawns++;
     const type = sp.input.subagent_type || "general-purpose";
@@ -271,7 +272,7 @@ for (const s of sessions) {
     const mainCtx = (s.turns[Math.min(Math.max(sp.turn, 1), s.turns.length) - 1] || {}).ctx || 0;
     let actual = 0, out = 0, G = 0, carried = 0;
     if (sp.sideTurns && sp.sideTurns.length) {
-      for (const t of sp.sideTurns) { addSpend("subagent", t.model || model, t.usage); actual += costOf(t.model || model, t.usage); out += t.usage.output_tokens || 0; }
+      for (const t of sp.sideTurns) { if (t.ts) ccEvents.push({ ts: t.ts, model: t.model || model, usage: t.usage }); addSpend("subagent", t.model || model, t.usage); actual += costOf(t.model || model, t.usage); out += t.usage.output_tokens || 0; }
       const first = sp.sideTurns[0].ctx;
       G = Math.max(0, sp.sideTurns[sp.sideTurns.length - 1].ctx - first);
       for (const t of sp.sideTurns) carried += mainCtx + Math.max(0, t.ctx - first);
@@ -289,7 +290,7 @@ for (const s of sessions) {
     const inline = carried * readPrice(s.mainModel) + (out + G) * writePrice(s.mainModel) + G * readPrice(s.mainModel) * remaining;
     const inlineBase = carried * readPrice(baseFam) + (out + G) * writePrice(baseFam) + G * readPrice(baseFam) * remaining;
     const inlineTok = carried + out + G + G * remaining; // token side of the inline formula
-    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), actual, inline, inlineBase, inlineTok, savings: inline - actual });
+    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), effort: String(sp.input.effort || "default"), actual, inline, inlineBase, inlineTok, savings: inline - actual });
   }
 }
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
@@ -590,6 +591,28 @@ SV.splice(2, 0, `**Limit stretch** vs running everything on the baseline: ${lim(
   `**Top-model tokens kept off**: Claude Code ≈${tk(ccOff)} tokens (${baseFam} processed ${tk(ccOn)} itself)${agOk ? `; Antigravity ≈${tk(agOff)} (${agBaseline} processed ${tk(agOn)})` : ""}. Tokens are not comparable across models in $; this shows how much load the expensive model was spared.`, "");
 SV.push("", `Where it came from: model choice ${usd(cc.model)} (Claude)${agOk ? ` / ${usd(agS.model)} (Antigravity)` : ""}; delegation ${usd(cc.deleg)}${agOk ? ` / ${usd(agS.deleg)}` : ""}.`, "");
 
+// ---------- peak windows (Claude Code only: Antigravity turns carry no timestamps) ----------
+function peakWindow(ms) {
+  const ev = ccEvents.filter((e) => e.usage).sort((a, b) => a.ts - b.ts);
+  const act = ev.map((e) => costOf(e.model, e.usage)), bas = ev.map((e) => costOf(baseFam, e.usage));
+  let best = null, lo = 0, a = 0, b = 0;
+  for (let hi = 0; hi < ev.length; hi++) {
+    a += act[hi]; b += bas[hi];
+    while (ev[hi].ts - ev[lo].ts >= ms) { a -= act[lo]; b -= bas[lo]; lo++; }
+    if (!best || a > best.actual) best = { actual: a, base: b, n: hi - lo + 1, start: ev[lo].ts };
+  }
+  return best;
+}
+const pk5 = peakWindow(5 * 3600e3), pk7 = peakWindow(7 * 86400e3);
+const utc = (t) => new Date(t).toISOString().slice(0, 16).replace("T", " ");
+const PK = [`## Peak windows`, ""];
+if (!pk5) PK.push(`No timestamped Claude Code turns in this window.`, "");
+else {
+  PK.push(`| Window | Start (UTC) | Requests | Actual | All on ${baseFam} | Stretch |`, `| :-- | :-- | --: | --: | --: | --: |`);
+  for (const [n, p] of [["Busiest 5 hours", pk5], ["Busiest 7 days", pk7]]) PK.push(`| ${n} | ${utc(p.start)} | ${fmt(p.n)} | ${usd(p.actual)} | ${usd(p.base)} | ${p.actual > 0 ? (p.base / p.actual).toFixed(2) : "n/a"}x |`);
+  PK.push("", `Claude Code only (main + subagent turns); Antigravity: no per-call timestamps. Absolute plan limits aren't published, so compare peaks over time: a falling peak for the same work means more headroom.`, "");
+}
+
 const today = new Date().toISOString().slice(0, 10);
 const L = [];
 L.push(`# Token report`, "");
@@ -599,6 +622,7 @@ L.push(`- Generated: ${today}`);
 L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, sonnet ${PRICES.sonnet.in}/${PRICES.sonnet.out}, haiku ${PRICES.haiku.in}/${PRICES.haiku.out}); cache write 1.25x (5m) or 2x (1h), cache read 0.1x. These are API-equivalent costs, not what a subscription charges; quota roughly tracks cost-weighted tokens.`, "");
 
 L.push(...SV);
+L.push(...PK);
 L.push(`## Spend by model`, "", `| Scope | Model | Requests | Input | Cache write | Cache read | Output | $ |`, `| :-- | :-- | --: | --: | --: | --: | --: | --: |`);
 for (const r of [...spendRows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
   L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${usd(r.cost)} |`);
@@ -666,6 +690,14 @@ if (!totalSpawns) {
     for (const r of wasteful) L.push(`| ${r.session} | ${r.type} / ${r.model} | ${r.desc} | ${usd(r.savings)} |`);
     L.push("");
   }
+  const esc = spawnRows.filter((r) => r.model === "opus");
+  if (esc.length) {
+    const by2 = (e) => esc.filter((r) => r.effort === e), sum = (a) => a.reduce((x, r) => x + r.actual, 0);
+    const mx = by2("max"), hi = by2("high"), oth = esc.filter((r) => r.effort !== "max" && r.effort !== "high");
+    L.push(`### Escalations (opus subagents)`, "", `| Session | Effort | Description | Cost |`, `| :-- | :-- | :-- | --: |`);
+    for (const r of esc) L.push(`| ${r.session} | ${r.effort} | ${r.desc.replace(/\|/g, "\\|")} | ${usd(r.actual)} |`);
+    L.push("", `${esc.length} escalation${esc.length === 1 ? "" : "s"}: ${mx.length} at max (${usd(sum(mx))}), ${hi.length} at high (${usd(sum(hi))}), ${oth.length} other`, "");
+  }
 }
 
 L.push(`## Context hygiene`, "", `Late-checkpoint waste = cost of carrying context more than ${fmt(SOFT)} tokens past the session baseline, at cache-read price.`, "",
@@ -676,7 +708,36 @@ L.push(`| **total** | | | | | **${usd(totalWaste)}** |`, "", `**Top 10 largest t
 for (const r of top10) L.push(`| ${r.session} | ${r.tool} | ${r.hint.replace(/\|/g, "\\|")} | ${fmt(r.chars)} | ${usd(r.cost)} |`);
 L.push("");
 
-L.push(`## Verdict`, "",
+let agSamePct = null;
+if (ag.status === "ok") {
+  const rows0 = [...ag.rows.values()];
+  const mainTop0 = rows0.filter((r) => r.scope === "main").sort((a, b) => b.cost - a.cost)[0];
+  const subs0 = rows0.filter((r) => r.scope === "subagent"), subCost0 = subs0.reduce((a, r) => a + r.cost, 0);
+  if (mainTop0 && subCost0 > 0) agSamePct = Math.round(100 * subs0.filter((r) => geminiPrice(r.model).in === geminiPrice(mainTop0.model).in).reduce((a, r) => a + r.cost, 0) / subCost0);
+}
+const hp = path.join(outDir, "history.csv");
+const TREND_COLS = ["stretch_cc", "stretch_ag", "ag_same_tier_pct", "peak5h_usd"];
+const trendNow = { stretch_cc: stretch(cc).toFixed(2), stretch_ag: agOk && ag.cost > 0 ? stretch(agS).toFixed(2) : "", ag_same_tier_pct: agSamePct == null ? "" : String(agSamePct), peak5h_usd: pk5 ? pk5.actual.toFixed(2) : "" };
+let trendLine = null;
+{
+  const oldCsv = safeRead(hp);
+  const lines = oldCsv ? oldCsv.split("\n").filter(Boolean) : [];
+  if (lines.length > 1) {
+    const cols = lines[0].split(","), rows = lines.slice(1).map((l) => l.split(","));
+    const prior = rows.filter((r) => r[0] < today);
+    const prev = prior.length ? prior[prior.length - 1] : rows[rows.length - 1];
+    const get = (c) => { const i = cols.indexOf(c); return i >= 0 ? (prev[i] || "") : ""; };
+    const parts = [];
+    if (get("stretch_cc") && trendNow.stretch_cc) parts.push(`Claude stretch ${get("stretch_cc")}x → ${trendNow.stretch_cc}x`);
+    if (get("stretch_ag") && trendNow.stretch_ag) parts.push(`Antigravity stretch ${get("stretch_ag")}x → ${trendNow.stretch_ag}x`);
+    if (get("ag_same_tier_pct") && trendNow.ag_same_tier_pct) parts.push(`Antigravity same-tier subagents ${get("ag_same_tier_pct")}% → ${trendNow.ag_same_tier_pct}%`);
+    if (get("peak5h_usd") && trendNow.peak5h_usd) parts.push(`peak 5h $${get("peak5h_usd")} → $${trendNow.peak5h_usd}`);
+    trendLine = parts.length ? `Trend vs ${prev[0]}: ${parts.join("; ")}.` : "Trend: first run with trend columns, compare next time.";
+  }
+}
+L.push(`## Verdict`, "");
+if (trendLine) L.push(`- ${trendLine}`);
+L.push(
   `- Claude Code kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} spend); delegation savings: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
   ` Savings / overhead ratio: ${kitCost > 0 ? (delegationSavings / kitCost).toFixed(2) : "n/a"}.`);
 L.push(`- Net saved vs ${baseFam}: **${usd(cc.net)}** (${npct(cc)} of baseline).`);
@@ -688,6 +749,10 @@ L.push("");
 const rec = [];
 if (!totalSpawns) rec.push(`Delegation isn't happening: either enforce it or drop the orchestration rules (§1) to save ≈${fmt(tok(blockChars))} tokens/session.`);
 else if (wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} of ${spawnRows.length} spawns (${Math.round(100 * wasteful.length / spawnRows.length)}%) cost more than inline: raise the "trivial" threshold so small tasks stay inline.`);
+{
+  const mx = spawnRows.filter((r) => r.model === "opus" && r.effort === "max");
+  if (mx.length) rec.push(`${mx.length} Opus escalation(s) ran at max (${usd(mx.reduce((a, r) => a + r.actual, 0))}): check each against model-orchestrator "High vs max" (default is high).`);
+}
 if (totalWaste > kitCost && totalWaste > 0) rec.push(`Late-checkpoint waste (${usd(totalWaste)}) exceeds kit overhead (${usd(kitCost)}): checkpoint earlier (lower CC_WATCH_SOFT/HARD).`);
 if (top10.length && top10[0].chars > 20000) rec.push(`Bounded reads are being skipped: largest tool result is ${fmt(top10[0].chars)} chars (${top10[0].tool}: ${top10[0].hint || "n/a"}).`);
 if (totalSpend && kitCost / totalSpend > 0.05) rec.push(`Kit overhead is ${pct(kitCost)} of spend (> 5%): trim rules/descriptions.`);
@@ -719,10 +784,9 @@ try {
   if (!fs.existsSync(gi)) fs.writeFileSync(gi, "*\n");
   const reportPath = path.join(outDir, "token-report.md");
   fs.writeFileSync(reportPath, L.join("\n"));
-  const hp = path.join(outDir, "history.csv");
-  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd\n";
+  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd," + TREND_COLS.join(",") + "\n";
   const agUsd = ag.status === "ok" ? ag.cost.toFixed(2) : "";
-  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2)].join(",") + "\n";
+  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2), ...TREND_COLS.map((c) => trendNow[c])].join(",") + "\n";
   const old = safeRead(hp);
   if (old && !old.startsWith(header)) fs.writeFileSync(hp, header + old.slice(old.indexOf("\n") + 1)); // upgrade header; old rows leave the new column blank
   fs.appendFileSync(hp, (old ? "" : header) + row);
