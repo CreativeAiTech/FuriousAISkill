@@ -86,14 +86,22 @@ The top tier (Opus / Pro class, at high effort) is the **minimum** for any of th
 
 **Default top-tier areas (a floor in every project).** Deciding anything here needs the top tier: auth, sessions and permissions; payments, money, wallets, payouts; database schema, migrations, and persisted or saved data formats; public API, SDK, or protocol contracts; secrets and cryptography; concurrency and shared or distributed state; deploy, infrastructure, and CI that ships code; deleting or retaining user data; changes spanning 4+ files. Projects add their own areas in a "Minimum tier" table in AGENTS.md (template: `assets/min-tier.template.md`). They can't silently lower a default: lowering one needs a written reason in that table. Executing an already written top-tier decision can go to any tier.
 
-**Know what you're running on.** Your system prompt names your model; trust that, not your assumption. Re-check before each top-tier decision, not only at session start: Claude Code can switch from Opus to Sonnet when Opus usage runs out, and a failed Opus subagent call must never turn into "I'll just do it myself." Opus at low or medium effort isn't top tier for hard work either, and a session can't raise its own effort (Claude Code refuses it). So when a trigger fires below high effort: a contained question → spawn an Opus subagent with `effort: "max"` automatically (no confirmation, except the large-quota rule above) and have it write the decision note; a big decision that depends on this conversation's context → ask the user in one line to raise the effort to high, then continue.
+**Know what you're running on.** Your system prompt names your model; trust that, not your assumption. Re-check before each top-tier decision, not only at session start: Claude Code can switch from Opus to Sonnet when Opus usage runs out, and a failed Opus subagent call must never turn into "I'll just do it myself." Opus at low or medium effort isn't top tier for hard work either, and a session can't raise its own effort (Claude Code refuses it). So when a trigger fires below high effort: a contained question → spawn an Opus subagent with `effort: "high"` automatically (no confirmation, except the large-quota rule above) and have it write the decision note; a big decision that depends on this conversation's context → ask the user in one line to raise the effort to high, then continue.
+
+**High vs max.** The top tier is the model; effort only sets how long it thinks. **High is the default** for every top-tier decision. Use `effort: "max"` only when at least one holds:
+1. **Silent-failure math**: an error typecheck and normal tests won't catch (transforms, kinematics, numeric stability, probability, crypto).
+2. **Costly to undo once shipped**: money or payouts, deleting user data, migrations of saved data or schemas already in users' hands, a released public contract.
+3. **Security analysis**: auth bypass, injection, secrets exposure.
+4. **Retry**: high already gave a wrong or unclear answer, or the same error came back twice.
+5. **Tangled constraints**: concurrency or shared state, or 3+ constraints that pull against each other.
+Caught before code, reversible, or a data-vs-spec ruling → high. Projects can list their own max areas under the "Minimum tier" table.
 
 **Decide high, execute low, never guess.** A decision is made by the top tier and *written down*; everything below only relays and executes it.
 
 | You are… | Do this |
 | :--- | :--- |
 | At or above the minimum tier | Decide, write it down, hand execution down to Mid/Small workers |
-| Below it, and the top tier is reachable | Escalate: Claude Code → subagent with `model: "opus"`, `effort: "max"` for a contained question (ask the user first if it's large, like a whole architecture, since it spends shared quota); Antigravity → Pro-class model in the picker, or route to `@claude`. Show a one-line banner: `▲ Escalated to <model>: <why>` |
+| Below it, and the top tier is reachable | Escalate: Claude Code → subagent with `model: "opus"`, `effort: "high"` (`"max"` only per **High vs max** above) for a contained question (ask the user first if it's large, like a whole architecture, since it spends shared quota); Antigravity → Pro-class model in the picker, or route to `@claude`. Show a one-line banner: `▲ Escalated to <model>: <why>` |
 | Below it, top tier unreachable (out of quota, fallback, call failed), decision **hard to reverse** | **Stop.** Tell the user plainly: "This needs top-tier judgment and it isn't available. Wait for the quota reset or switch models." Queue a self-contained `@claude` (or top-tier) backlog item so nobody has to relay it. Produce no answer to the decision |
 | Below it, top tier unreachable, decision **reversible** | Offer **draft mode** (below). Only proceed if the user agrees |
 | The user says "do it anyway" | Draft mode, and log the override in the draft header |
