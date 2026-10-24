@@ -79,3 +79,9 @@ Opt out with `node ~/.agents/sync.mjs --disable task-board`; `--list` shows what
 
 Designed and directed by AlexTheHero (CreativeAiTech), built together with AI agents: mainly Claude Code (Claude Opus),
 plus Gemini in Antigravity and Grok. Tested in daily use on their game project.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Free to use, change and share.
+
+If this saved you time, you can buy me a coffee: https://paypal.me/thealexseven
