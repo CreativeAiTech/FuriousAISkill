@@ -1,6 +1,6 @@
 # Global Orchestration & Token Rules (all projects, all tools)
 
-Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
+Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, with one exception: the default top-tier areas (`model-orchestrator` Step 4) are a floor. Projects may add areas; lowering one needs an explicit written reason in the project's rules. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
 
 ## 1. Orchestrator-first (always on, decide before acting)
 The main session is the **brain**: it classifies, plans, writes specs, and reviews. Cheaper subagents do the legwork. Before the first tool call on any request, pick a route and state it in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.

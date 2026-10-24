@@ -30,7 +30,7 @@ Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other 
 | Item | Owns |
 | :--- | :--- |
 | `rules/token-optimization.md` | Lean context, generic lifecycle, bounded tool use, checkpoint trigger |
-| `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, delegation, task specs, cross-tool handoff, Grok banners, token audits |
+| `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 
 Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It lives in `hooks/context-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).

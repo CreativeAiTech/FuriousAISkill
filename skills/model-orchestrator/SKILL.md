@@ -68,7 +68,9 @@ The top tier (Opus / Pro class, at high effort) is the **minimum** for any of th
 - a bug whose cause is still unknown after one real attempt, or the same error twice
 - you're stuck: going in circles, conflicting constraints, or no confident approach
 - security, data-loss, or money risk
-- any area the project's rules mark as top-tier (e.g. a "Minimum tier" table in AGENTS.md)
+- a decision in any of the **default top-tier areas** below, or in an area the project's rules add
+
+**Default top-tier areas (a floor in every project).** Deciding anything here needs the top tier: auth, sessions and permissions; payments, money, wallets, payouts; database schema, migrations, and persisted or saved data formats; public API, SDK, or protocol contracts; secrets and cryptography; concurrency and shared or distributed state; deploy, infrastructure, and CI that ships code; deleting or retaining user data; changes spanning 4+ files. Projects add their own areas in a "Minimum tier" table in AGENTS.md (template: `assets/min-tier.template.md`). They can't silently lower a default: lowering one needs a written reason in that table. Executing an already written top-tier decision can go to any tier.
 
 **Know what you're running on.** Your system prompt names your model; trust that, not your assumption. Re-check before each top-tier decision, not only at session start: Claude Code can switch from Opus to Sonnet when Opus usage runs out, and a failed Opus subagent call must never turn into "I'll just do it myself." Opus at low effort isn't top tier for hard work either: raise the session's effort, or ask the user to.
 
@@ -82,7 +84,7 @@ The top tier (Opus / Pro class, at high effort) is the **minimum** for any of th
 | Below it, top tier unreachable, decision **reversible** | Offer **draft mode** (below). Only proceed if the user agrees |
 | The user says "do it anyway" | Draft mode, and log the override in the draft header |
 
-**Write the decision down** (the top tier does this, not its caller): a decision note in the project's decisions folder if it has one (e.g. `.agents/decisions/YYYY-MM-DD-<slug>.md`), else in the backlog item or `CONTEXT.md`. Contents: **Decided by** (model), **Context**, **Decision**, **Why**, **Rejected options**, **Spec / Done when**, **Open questions**.
+**Write the decision down** (the top tier does this, not its caller): a decision note in the project's decisions folder if it has one (e.g. `.agents/decisions/YYYY-MM-DD-<slug>.md`), else in the backlog item or `CONTEXT.md`. Use `assets/decision-note.template.md`: **Decided by** (model), **Status**, **Context**, **Decision**, **Why**, **Rejected options**, **Spec / Done when**, **Open questions**.
 
 **Relaying is not deciding.** A lower tier that receives a top-tier result links to it or quotes its conclusion verbatim. It doesn't paraphrase it, "improve" it, or fill gaps with its own judgment. If execution hits a fork the decision didn't cover, stop and escalate again.
 
