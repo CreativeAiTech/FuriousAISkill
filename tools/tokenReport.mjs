@@ -100,6 +100,22 @@ function textLen(content) {
   return 0;
 }
 
+// All text of a tool result: string, array of content blocks, or {content}.
+function resultText(c) {
+  try {
+    if (typeof c === "string") return c;
+    if (Array.isArray(c)) return c.map((x) => (typeof x === "string" ? x : x && typeof x.text === "string" ? x.text : "")).join("\n");
+    if (c && typeof c === "object") return resultText(c.content !== undefined ? c.content : c.text);
+  } catch {}
+  return "";
+}
+// Leading whitespace allowed: Claude Code indents every line of a subagent's hand-back in the tool_result.
+function lastGate(text) {
+  let last = null;
+  try { for (const m of String(text || "").matchAll(/^[ \t]*GATE:\s*(pass|fail|none)\b/gim)) last = m[1].toLowerCase(); } catch {}
+  return last;
+}
+
 function frontmatter(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text || "");
   return m ? m[1] : "";
@@ -198,7 +214,10 @@ function parseSession(s) {
         if (!c || c.type !== "tool_result") continue;
         results.push({ id: c.tool_use_id, chars: textLen(c.content), turnAfter: turns.length });
         const sp = spawns.find((x) => x.id === c.tool_use_id);
-        if (sp) sp.result = e.toolUseResult || null;
+        if (sp) {
+          sp.result = e.toolUseResult || null;
+          sp.text = resultText(c.content) + "\n" + resultText(e.toolUseResult && e.toolUseResult.content);
+        }
       }
     }
   }
@@ -293,6 +312,43 @@ for (const s of sessions) {
     spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), effort: String(sp.input.effort || "default"), actual, inline, inlineBase, inlineTok, savings: inline - actual });
   }
 }
+// ---------- routing outcomes (GATE lines in spawn results) ----------
+const RULE_BASENAMES = new Set(["claude.md", "agents.md", "gemini.md", "skill.md", ".mcp.json"]);
+const RULE_DIRS = [".claude/skills/", ".agents/skills/", ".agents/rules/"];
+const NON_IMPL = new Set(["verifier", "Explore", "claude-code-guide", "statusline-setup"]);
+const routing = {}; // tier -> {n, pass, fail, vchecked, falsePass}
+const rt = (k) => (routing[k] = routing[k] || { n: 0, pass: 0, fail: 0, vchecked: 0, falsePass: 0 });
+let implSpawns = 0, implGated = 0, ruleEditSessions = 0;
+for (const s of sessions) {
+  let last = null; // latest implementation spawn so far
+  for (const sp of s.spawns) {
+    try {
+      const type = sp.input.subagent_type || "general-purpose";
+      const gate = lastGate(sp.text);
+      if (!NON_IMPL.has(type)) {
+        implSpawns++;
+        const fm = sp.input.model ? family(sp.input.model) : null;
+        const am = agentFrontmatterModel(type);
+        const tier = fm || (am && /opus|sonnet|haiku/i.test(am) ? family(am) : family(s.mainModel));
+        last = { tier, gate };
+        if (gate) { implGated++; const r = rt(tier); r.n++; if (gate === "pass") r.pass++; else if (gate === "fail") r.fail++; }
+      } else if (type === "verifier" && last && (gate === "pass" || gate === "fail")) {
+        const r = rt(last.tier); r.vchecked++;
+        if (last.gate === "pass" && gate === "fail") r.falsePass++;
+      }
+    } catch {}
+  }
+  try {
+    for (const tu of s.toolUses.values()) {
+      if (!["Edit", "Write", "MultiEdit", "NotebookEdit"].includes(tu.name)) continue;
+      const fp = String((tu.input && (tu.input.file_path || tu.input.notebook_path)) || "").replace(/\\/g, "/").toLowerCase();
+      const base = fp.split("/").pop();
+      if ((RULE_BASENAMES.has(base) || RULE_DIRS.some((d) => fp.includes("/" + d) || fp.startsWith(d))) && s.turns.length - tu.turn >= 3) { ruleEditSessions++; break; }
+    }
+  } catch {}
+}
+const routingTiers = Object.keys(routing).filter((k) => routing[k].n > 0);
+
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
 const wasteful = spawnRows.filter((r) => r.savings < 0);
 
@@ -700,6 +756,19 @@ if (!totalSpawns) {
   }
 }
 
+L.push(`## Routing outcomes`, "");
+if (!implGated) L.push(`n=0, collecting`, "");
+else {
+  L.push(`| Tier | Gated spawns | Pass | Fail | Pass rate | Verifier-checked | False passes |`, `| :-- | --: | --: | --: | --: | --: | --: |`);
+  for (const k of routingTiers) {
+    const r = routing[k];
+    const rate = r.n >= 10 ? (100 * r.pass / r.n).toFixed(0) + "%" : `n=${r.n}, collecting (need 10)`;
+    L.push(`| ${k} | ${r.n} | ${r.pass} | ${r.fail} | ${rate} | ${r.vchecked} | ${r.falsePass} |`);
+  }
+  L.push("");
+}
+L.push(`Coverage: ${implGated} of ${implSpawns} implementation spawns carried a GATE line.`, "", `Mid-session rule edits: ${ruleEditSessions} sessions`, "");
+
 L.push(`## Context hygiene`, "", `Late-checkpoint waste = cost of carrying context more than ${fmt(SOFT)} tokens past the session baseline, at cache-read price.`, "",
   `| Session | Turns | Baseline | Max ctx | Growth | Late-checkpoint waste |`, `| :-- | --: | --: | --: | --: | --: |`);
 for (const h of hygiene) L.push(`| ${h.id} | ${h.turns} | ${fmt(h.base)} | ${fmt(h.max)} | ${fmt(h.growth)} | ${usd(h.waste)} |`);
@@ -796,7 +865,7 @@ try {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
     const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
-    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""} (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
+    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""} (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns)${routingTiers.length ? " · routing " + routingTiers.map((k) => `${k} ${routing[k].pass}/${routing[k].n}${routing[k].falsePass ? ", " + routing[k].falsePass + " false pass" : ""}`).join(", ") : ""} · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);

@@ -7,6 +7,16 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.5.0 · 2026-10-25 · routing outcome instrument (GATE lines)
+
+**Changes**
+- agents/worker.md, agents/verifier.md: the reply ends with one machine-readable line, `GATE: pass|fail|none <command>` (worker) or `GATE: pass|fail <commands>` (verifier).
+- tools/tokenReport.mjs: new `## Routing outcomes` section after `## Delegation`: per-tier gated spawns, pass/fail, pass rate (shown at n >= 10), verifier-checked and false passes, GATE coverage, mid-session rule edits. `--summary` gains `routing <tier> <pass>/<n>`.
+
+**Why**: AGT-24: escalation must follow the gate; we had no per-tier pass data.
+
+**Measure**: after >=10 gated spawns: per-tier pass rate, false passes, coverage, mid-session rule edits (baseline for 1.7.0).
+
 ## 1.4.0 · 2026-10-24 · task board: parallel branches merge without conflicts
 
 **Changes**
