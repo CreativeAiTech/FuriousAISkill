@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Decides who does a task and how cheaply. First WHICH agent (Antigravity Gemini for routine work and all images, Claude Code for architecture, hard bugs, cross-file refactors and review, xAI Grok via MCP for wit, banter and brainstorming), then WHICH model tier inside it, then how to delegate (investigate → plan → implement → verify → review, tight task specs, diff review) and how to hand work across tools. Use whenever the user asks "who should do this", "which agent", "which model", "ask Grok", mentions saving tokens, token limits, quota, auditing token spend, Haiku vs Sonnet vs Opus, delegating to subagents, tagging backlog items, or switching tools mid-project, even if they don't say "orchestrator".
 metadata:
-  version: 1.0.0
+  version: 1.1.0
 ---
 
 # Model Orchestrator
@@ -110,7 +110,7 @@ Caught before code, reversible, or a data-vs-spec ruling → high. Projects can 
 | Below it, top tier unreachable, decision **reversible** | Offer **draft mode** (below). Only proceed if the user agrees |
 | The user says "do it anyway" | Draft mode, and log the override in the draft header |
 
-**Write the decision down** (the top tier does this, not its caller): a decision note in the project's decisions folder if it has one (e.g. `.agents/decisions/YYYY-MM-DD-<slug>.md`), else in the backlog item or `CONTEXT.md`. Use `assets/decision-note.template.md`: **Decided by** (model), **Status**, **Context**, **Decision**, **Why**, **Rejected options**, **Spec / Done when**, **Open questions**.
+**Write the decision down** (the top tier does this, not its caller): a decision note in the project's decisions folder if it has one (e.g. `.agents/decisions/YYYY-MM-DD-<slug>.md`), else in the backlog item or `CONTEXT.md`. Use `assets/decision-note.template.md`: **Decided by** (model), **Status**, **Context**, **Decision**, **Why**, **Rejected options**, **Spec / Done when**, **Open questions**, **Ripple**. A note that drops or supersedes something is done only after its Ripple sweep (dependent notes' Status, tickets, checkpoint, skills fixed in the same commit); executors check a cited note's Status before starting.
 
 **Relaying is not deciding.** A lower tier that receives a top-tier result links to it or quotes its conclusion verbatim. It doesn't paraphrase it, "improve" it, or fill gaps with its own judgment. If execution hits a fork the decision didn't cover, stop and escalate again.
 

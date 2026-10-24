@@ -7,6 +7,20 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.6.3 · 2026-10-25 · decision notes get a Ripple sweep
+
+**Changes**
+- model-orchestrator 1.1.0 `assets/decision-note.template.md`: `dropped` Status value; executors read Status/Outcome before
+  starting a ticket that cites the note; new `## Ripple` section (search notes, open tickets, checkpoint, skills; fix old
+  Status lines, close or rescope dependent tickets, list touched paths, no "still fine for X" side doors).
+- model-orchestrator SKILL.md: "Write the decision down" names Ripple and the executor check.
+
+**Why**: Crownspire 2026-10-25. AGT-30 dropped Repomix but left a side door and stale "YES" Status lines; a queued ticket
+(AGT-31) then added Repomix back to a skill. User: clean it up and make sure it can't happen again.
+
+**Measure**: next audit, no ticket closed against a note whose Status is superseded/dropped; notes that drop something carry a
+filled Ripple line.
+
 ## 1.6.2 · 2026-10-25 · checkpoint only when something is unsaved
 
 **Changes**
