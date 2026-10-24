@@ -367,11 +367,27 @@ const pct = (x) => (totalSpend ? (100 * x / totalSpend).toFixed(1) : "0.0") + "%
 // ---------- Antigravity (Gemini) ----------
 // One SQLite DB per conversation in ~/.gemini/antigravity/conversations/<uuid>.db.
 // Blobs are protobuf; field numbers verified against real DBs (2026-10-24):
-//   trajectory_metadata_blob['main']: 1.1 = workspace file URI, 2.1 = created (unix s)
+//   trajectory_metadata_blob['main']:
+//     1.1 = workspace file URI, 2.1 = created (unix s)
+//     5.1 = parent conversation UUID (present only on subagents)
+//     8 = subagent metadata: 8.1 = type name, 8.2 = role, 8.3 = prompt
+//     17 = 1 if subagent
 //   gen_metadata.data (one row per model call): 1.19 = model name, 1.4 = usage stats:
 //     2 input (uncached), 3 output (= 9 thinking + 10 response), 5 cache read, 4 cache write
 // Any read error marks the store unreadable; it never touches the Claude section.
-const ag = { status: "none", sessions: 0, skipped: 0, rows: new Map(), cost: 0 };
+const ag = {
+  status: "none",
+  mainSessions: [],
+  subagents: [],
+  skipped: 0,
+  rows: new Map(),
+  cost: 0,
+  kitItems: [],
+  kitChars: 0,
+  kitCost: 0,
+  spawns: [],
+  delegationSavings: 0,
+};
 function pbVarint(b, i) { let r = 0, m = 1; for (;;) { if (i >= b.length) throw new Error("pb: eof"); const x = b[i++]; r += (x & 0x7f) * m; m *= 128; if (!(x & 0x80)) return [r, i]; } }
 function pbFields(b) {
   const o = {}; let i = 0;
@@ -391,11 +407,28 @@ const geminiPrice = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[1]
 const normPath = (p) => path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 const agDir = path.join(home, ".gemini", "antigravity", "conversations");
 const agFiles = safeDir(agDir).filter((f) => f.endsWith(".db"));
+
+// Antigravity kit items measurement
+try {
+  const agAgentsText = safeRead(path.join(project, "AGENTS.md")) || "";
+  const agOptRule = safeRead(path.join(home, ".gemini", "config", "rules", "token-optimization.md")) || "";
+  ag.kitItems = [
+    ["Project AGENTS.md (user rules)", agAgentsText.length],
+    [`Project skill descriptions (${pSk.n})`, pSk.chars],
+    [`Kit global skill descriptions (${gSk.n})`, gSk.chars],
+  ];
+  if (agOptRule) ag.kitItems.push(["Kit global rules (token-optimization)", agOptRule.length]);
+  ag.kitChars = ag.kitItems.reduce((a, x) => a + x[1], 0);
+} catch {}
+
 if (agFiles.length) {
   try {
     const { DatabaseSync } = await import("node:sqlite");
     const want = normPath(project);
     let readable = 0;
+    const mainSessionsMap = new Map();
+    const rawSubagents = [];
+
     for (const f of agFiles) {
       const fp = path.join(agDir, f);
       let db;
@@ -407,8 +440,17 @@ if (agFiles.length) {
         readable++;
         const ws = normPath(fileURLToPath(uri));
         if (ws !== want && !ws.startsWith(want + "/")) continue; // other project
+
+        const id = f.slice(0, -3);
+        const isSub = Boolean(meta[5] || meta[17]);
+        const parentId = meta[5]?.[0]?.toString() || "";
+        const subType = meta[8] ? pbFields(meta[8][0])[1]?.[0]?.toString() : (meta[4] ? pbFields(meta[4][0])[1]?.[0]?.toString() : "subagent");
+        const subRole = meta[8] ? pbFields(meta[8][0])[2]?.[0]?.toString() : "";
+        const subPrompt = meta[8] ? pbFields(meta[8][0])[3]?.[0]?.toString() : "";
+
+        const turns = [];
         let reqs = 0;
-        for (const r of db.prepare("SELECT data FROM gen_metadata").all()) {
+        for (const r of db.prepare("SELECT data FROM gen_metadata ORDER BY idx").all()) {
           const g = pbFields(pbFields(Buffer.from(r.data))[1][0]);
           if (!g[4]) continue;
           const u = pbFields(g[4][0]), n = (k) => u[k]?.[0] ?? 0;
@@ -416,13 +458,66 @@ if (agFiles.length) {
           const model = g[19]?.[0]?.toString() || "unknown";
           const p = geminiPrice(model);
           const cost = (n(2) * p.in + n(4) * p.in + n(5) * p.in * GEMINI_CACHE_READ + n(3) * p.out) / 1e6;
-          const row = ag.rows.get(model) || { model, req: 0, inp: 0, cw: 0, cr: 0, out: 0, think: 0, cost: 0 };
+          const scope = isSub ? "subagent" : "main";
+          const key = scope + "|" + model;
+          const row = ag.rows.get(key) || { scope, model, req: 0, inp: 0, cw: 0, cr: 0, out: 0, think: 0, cost: 0 };
           row.req++; row.inp += n(2); row.cw += n(4); row.cr += n(5); row.out += n(3); row.think += n(9); row.cost += cost;
-          ag.rows.set(model, row); ag.cost += cost; reqs++;
+          ag.rows.set(key, row);
+          ag.cost += cost;
+          reqs++;
+          turns.push({ model, inp: n(2), cw: n(4), cr: n(5), out: n(3), think: n(9), cost, ctx: n(2) + n(4) + n(5) });
         }
-        if (reqs) ag.sessions++;
+
+        if (reqs) {
+          if (isSub) {
+            rawSubagents.push({ id, parentId, type: subType || "subagent", role: subRole, prompt: subPrompt, turns });
+          } else {
+            const cnt = {};
+            for (const t of turns) cnt[t.model] = (cnt[t.model] || 0) + 1;
+            const mainModel = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0] || "gemini-3.8-flash";
+            const session = { id, mainModel, turns, reqs };
+            mainSessionsMap.set(id, session);
+            ag.mainSessions.push(session);
+          }
+        }
       } catch { ag.skipped++; } finally { try { db?.close(); } catch {} }
     }
+
+    // Antigravity kit overhead across main sessions
+    for (const s of ag.mainSessions) {
+      const p = geminiPrice(s.mainModel);
+      ag.kitCost += tok(ag.kitChars) * (p.in / 1e6 + (p.in * GEMINI_CACHE_READ / 1e6) * Math.max(0, s.turns.length - 1));
+    }
+
+    // Antigravity delegation savings across subagents
+    for (const sub of rawSubagents) {
+      ag.subagents.push(sub);
+      const parent = mainSessionsMap.get(sub.parentId);
+      const mainModel = parent?.mainModel || "gemini-3.8-flash";
+      const pMain = geminiPrice(mainModel);
+      const mainCtx = parent ? (parent.turns[Math.floor(parent.turns.length / 2)]?.ctx || 35000) : 35000;
+
+      let actual = 0, totalOut = 0;
+      for (const t of sub.turns) { actual += t.cost; totalOut += t.out; }
+      const firstCtx = sub.turns[0].ctx;
+      const G = Math.max(0, sub.turns[sub.turns.length - 1].ctx - firstCtx);
+      let carried = 0;
+      for (const t of sub.turns) carried += mainCtx + Math.max(0, t.ctx - firstCtx);
+
+      const mainReadPrice = pMain.in * GEMINI_CACHE_READ / 1e6;
+      const inline = carried * mainReadPrice + (totalOut + G) * (pMain.in / 1e6) + G * mainReadPrice * 5;
+      ag.spawns.push({
+        session: sub.id.slice(0, 8),
+        type: sub.type,
+        model: sub.turns[0]?.model || "flash-lite",
+        desc: sub.prompt.slice(0, 60),
+        actual,
+        inline,
+        savings: inline - actual,
+      });
+    }
+    ag.delegationSavings = ag.spawns.reduce((a, r) => a + r.savings, 0);
+
     ag.status = readable || !ag.skipped ? "ok" : "unreadable";
   } catch { ag.status = "unreadable"; }
 }
@@ -444,12 +539,37 @@ L.push(`## Antigravity (Gemini)`, "");
 if (ag.status === "none") L.push(`No Antigravity conversations found in \`~/.gemini/antigravity/conversations\`.`, "");
 else if (ag.status === "unreadable") L.push(`**Antigravity: usage not readable (format unknown).** The kit's protobuf field map no longer matches; re-verify it in tokenReport.mjs.`, "");
 else {
-  L.push(`${ag.sessions} conversations with usage in this project (window by file mtime)${ag.skipped ? `; ${ag.skipped} unreadable DBs skipped` : ""}. Antigravity reports input excluding cache reads; thinking is part of output. Prices: estimated Gemini API list $/MTok (${GEMINI_PRICES.filter(([k]) => k).map(([k, p]) => `${k} ${p.in}/${p.out}`).join(", ")}, unknown models as flash), cache read ${GEMINI_CACHE_READ}x. Not what the Antigravity plan charges.`, "",
-    `| Model | Requests | Input | Cache write | Cache read | Output | of which thinking | $ |`, `| :-- | --: | --: | --: | --: | --: | --: | --: |`);
-  for (const r of [...ag.rows.values()].sort((a, b) => b.cost - a.cost))
-    L.push(`| ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${fmt(r.think)} | ${usd(r.cost)} |`);
-  L.push(`| **total** | | | | | | | **${usd(ag.cost)}** |`, "",
-    `Kit overhead and delegation savings above are Claude Code only: Antigravity transcripts don't expose the system prompt or subagent boundaries in a form this report can measure yet.`, "");
+  const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
+  L.push(`${ag.mainSessions.length} main sessions, ${ag.subagents.length} subagents with usage in this project (window by file mtime)${ag.skipped ? `; ${ag.skipped} unreadable DBs skipped` : ""}. Antigravity reports input excluding cache reads; thinking is part of output. Prices: estimated Gemini API list $/MTok (${GEMINI_PRICES.filter(([k]) => k).map(([k, p]) => `${k} ${p.in}/${p.out}`).join(", ")}, unknown models as flash), cache read ${GEMINI_CACHE_READ}x. Not what the Antigravity plan charges.`, "");
+
+  L.push(`### Spend by model`, "",
+    `| Scope | Model | Requests | Input | Cache write | Cache read | Output | of which thinking | $ |`,
+    `| :-- | :-- | --: | --: | --: | --: | --: | --: | --: |`);
+  for (const r of [...ag.rows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
+    L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${fmt(r.think)} | ${usd(r.cost)} |`);
+  L.push(`| **total** | | | | | | | | **${usd(ag.cost)}** |`, "");
+
+  L.push(`### Kit overhead`, "",
+    `Fixed text the kit adds to every main session (~${fmt(tok(ag.kitChars))} tokens). Cost per session = tokens x (input write once + cache read x main turns), at the session's main model.`, "",
+    `| Item | Scope | Chars | ≈Tokens |`, `| :-- | :-- | --: | --: |`);
+  for (const [n, c] of ag.kitItems) L.push(`| ${n} | Antigravity | ${fmt(c)} | ${fmt(tok(c))} |`);
+  L.push("", `Total Antigravity kit overhead: **${usd(ag.kitCost)}** (${agPct(ag.kitCost)} of ${usd(ag.cost)} spend).`, "");
+
+  L.push(`### Delegation`, "");
+  if (!ag.spawns.length) {
+    L.push(`No subagents spawned in ${ag.mainSessions.length} main sessions.`, "");
+  } else {
+    const agBy = {};
+    for (const r of ag.spawns) {
+      const k = r.type + " / " + r.model;
+      agBy[k] = agBy[k] || { n: 0, a: 0, i: 0 };
+      agBy[k].n++; agBy[k].a += r.actual; agBy[k].i += r.inline;
+    }
+    L.push(`| Subagent / model | Spawns | Actual $ | Inline est. $ | Savings $ |`, `| :-- | --: | --: | --: | --: |`);
+    for (const [k, v] of Object.entries(agBy)) L.push(`| ${k} | ${v.n} | ${usd(v.a)} | ${usd(v.i)} | ${usd(v.i - v.a)} |`);
+    L.push(`| **total** | **${ag.spawns.length}** | | | **${usd(ag.delegationSavings)}** |`, "");
+    L.push(`Inline estimate = what the same work would cost in the main session at its model price. Lightweight read-only subagents (\`research\` on flash-lite) yield strong savings; \`self\` worker spawns on heavy models cost more than inline when context is re-read.`, "");
+  }
 }
 
 L.push(`## Kit overhead`, "", `Fixed text the kit adds to every session. Cost per session = tokens x (cache write once + cache read x main turns), at the session's main model.`, "",
@@ -488,8 +608,13 @@ L.push("");
 
 const kitCost = globalCost + projectCost;
 L.push(`## Verdict`, "",
-  `- Kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} spend); delegation savings: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
-  ` Savings / overhead ratio: ${kitCost > 0 ? (delegationSavings / kitCost).toFixed(2) : "n/a"}.`, "");
+  `- Claude Code kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} spend); delegation savings: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
+  ` Savings / overhead ratio: ${kitCost > 0 ? (delegationSavings / kitCost).toFixed(2) : "n/a"}.`);
+if (ag.status === "ok") {
+  const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
+  L.push(`- Antigravity kit overhead: **${usd(ag.kitCost)}** (${agPct(ag.kitCost)} of ${usd(ag.cost)} spend); delegation savings: **${usd(ag.delegationSavings)}** over ${ag.spawns.length} subagent runs.`);
+}
+L.push("");
 const rec = [];
 if (!totalSpawns) rec.push(`Delegation isn't happening: either enforce it or drop the orchestration rules (§1) to save ≈${fmt(tok(blockChars))} tokens/session.`);
 else if (wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} of ${spawnRows.length} spawns (${Math.round(100 * wasteful.length / spawnRows.length)}%) cost more than inline: raise the "trivial" threshold so small tasks stay inline.`);
@@ -517,7 +642,8 @@ try {
   if (wantSummary) {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
-    console.log(`Token report (${days}d, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${ag.status === "ok" ? `${usd(ag.cost)} (${ag.sessions} convs)` : ag.status === "none" ? "none" : "not readable"} → ${shown}`);
+    const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
+    console.log(`Token report (${days}d, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
