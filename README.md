@@ -1,15 +1,32 @@
-# FuriousAISkill: global AI skills & rules (single source of truth)
+# FuriousAISkill
 
-This repo (`git@github.com:CreativeAiTech/FuriousAISkill.git`) is the agent kit. It is cloned to `~/.agents`.
+**Run Claude Code, Gemini (Antigravity) and other AI agents on one repo, cheaply and without them stepping on each other.**
+No server, no database: just markdown rules, a few small Node scripts, and git.
+
+If you use more than one AI coding agent (or several sessions of the same one), you have probably seen this:
+two agents grab the same task, one overwrites the other's work, the next session forgets what the last one decided,
+and the expensive model burns quota on file searches a cheap one could do. This kit is one person's answer to that,
+used daily on a real game project.
+
+**What's inside**
+- **Orchestration rules** (`rules/token-optimization.md`, `model-orchestrator` skill): the top model plans and reviews,
+  cheaper subagents (`worker`, `verifier`) search, edit and run checks. Hard decisions stay on the top tier.
+- **Task board** (`task-board` skill, `tools/baton.mjs`, experimental, opt-in): tickets with claims and leases, a handoff
+  "baton" each session writes before it stops, and a brief the next agent reads first. `git push` is the lock.
+- **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
+- **Token report** (`tools/tokenReport.mjs`): where your tokens went, and how much delegation actually saved.
+
+One `sync.mjs` copies everything into Claude Code (`~/.claude`) and Antigravity (`~/.gemini`), so every tool follows the same rules.
+Status: personal kit, shared as-is. MIT licensed, issues welcome.
 
 ## Install
 
 ```
-git clone git@github.com:CreativeAiTech/FuriousAISkill.git ~/.agents
+git clone https://github.com/CreativeAiTech/FuriousAISkill.git ~/.agents
 node ~/.agents/sync.mjs
 ```
 
-Etherium's `yarn install` does this automatically (clone if missing, fast-forward when clean, then sync).
+Tip: a project can run this from its install script (clone if missing, fast-forward when clean, then sync) so every machine stays current.
 
 `sync.mjs` copies the kit into every tool:
 
