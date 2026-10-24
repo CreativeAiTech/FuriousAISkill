@@ -288,7 +288,8 @@ for (const s of sessions) {
     // the work written once, then carried on every remaining main turn.
     const inline = carried * readPrice(s.mainModel) + (out + G) * writePrice(s.mainModel) + G * readPrice(s.mainModel) * remaining;
     const inlineBase = carried * readPrice(baseFam) + (out + G) * writePrice(baseFam) + G * readPrice(baseFam) * remaining;
-    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), actual, inline, inlineBase, savings: inline - actual });
+    const inlineTok = carried + out + G + G * remaining; // token side of the inline formula
+    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), actual, inline, inlineBase, inlineTok, savings: inline - actual });
   }
 }
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
@@ -411,6 +412,7 @@ function pbFields(b) {
   }
   return o;
 }
+const geminiKey = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[0]; // matched key ("" = unpriced fallback)
 const geminiPrice = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[1];
 const normPath = (p) => path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 const agDir = path.join(home, ".gemini", "antigravity", "conversations");
@@ -571,10 +573,21 @@ if (agOk) {
   SV.push(sRow(`Antigravity vs ${agBaseline}`, agS), sRow(`Antigravity vs Claude ${baseFam} (rough: different tokenizers, separate plan)`, agC));
   SV.push(sRow("**Total (Claude + Antigravity at own baselines)**", { actual: cc.actual + agS.actual, base: cc.base + agS.base, kit: cc.kit + agS.kit, gross: cc.gross + agS.gross, net: cc.net + agS.net }));
 }
+// Top-model tokens kept off: tokens (input + cache write + cache read + output) that did not run on the baseline model.
+const uTok = (u) => (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.output_tokens || 0);
+const tk = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)));
+let ccOff = spawnRows.reduce((a, r) => a + r.inlineTok, 0), ccOn = 0;
+for (const s of sessions) for (const t of s.turns) { if (family(t.model) === baseFam) ccOn += uTok(t.usage); else ccOff += uTok(t.usage); }
+let agOff = 0, agOn = 0;
+if (agOk) {
+  for (const s of ag.mainSessions) for (const t of s.turns) { const n = t.inp + t.cw + t.cr + t.out; if (t.model.includes(agBaseline)) agOn += n; else agOff += n; }
+  agOff += ag.spawns.reduce((a, r) => a + r.carried + r.totalOut + r.G + r.G * r.remaining, 0);
+}
 // Limit stretch: quota tracks cost-weighted tokens, so (baseline without kit) / actual = how much more work fits before a reset.
 const stretch = (r) => (r.actual > 0 ? (r.base - r.kit) / r.actual : 0);
 const lim = (name, r) => `${name} **${stretch(r).toFixed(2)}x** (a 5-hour window lasts ≈${(5 * stretch(r)).toFixed(1)} h of baseline-model work)`;
-SV.splice(2, 0, `**Limit stretch** vs running everything on the baseline: ${lim("Claude Code", cc)}${agOk && ag.cost > 0 ? `; ${lim("Antigravity", agS)}` : ""}. Same for weekly limits.`, "");
+SV.splice(2, 0, `**Limit stretch** vs running everything on the baseline: ${lim("Claude Code", cc)}${agOk && ag.cost > 0 ? `; ${lim("Antigravity", agS)}` : ""}. Same for weekly limits.`, "",
+  `**Top-model tokens kept off**: Claude Code ≈${tk(ccOff)} tokens (${baseFam} processed ${tk(ccOn)} itself)${agOk ? `; Antigravity ≈${tk(agOff)} (${agBaseline} processed ${tk(agOn)})` : ""}. Tokens are not comparable across models in $; this shows how much load the expensive model was spared.`, "");
 SV.push("", `Where it came from: model choice ${usd(cc.model)} (Claude)${agOk ? ` / ${usd(agS.model)} (Antigravity)` : ""}; delegation ${usd(cc.deleg)}${agOk ? ` / ${usd(agS.deleg)}` : ""}.`, "");
 
 const today = new Date().toISOString().slice(0, 10);
@@ -596,14 +609,15 @@ if (ag.status === "none") L.push(`No Antigravity conversations found in \`~/.gem
 else if (ag.status === "unreadable") L.push(`**Antigravity: usage not readable (format unknown).** The kit's protobuf field map no longer matches; re-verify it in tokenReport.mjs.`, "");
 else {
   const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
+  const thinkPct = (th, o) => (o > 0 ? (100 * th / o).toFixed(0) + "%" : "n/a");
   L.push(`${ag.mainSessions.length} main sessions, ${ag.subagents.length} subagents with usage in this project (window by file mtime)${ag.skipped ? `; ${ag.skipped} unreadable DBs skipped` : ""}. Antigravity reports input excluding cache reads; thinking is part of output. Prices: estimated Gemini API list $/MTok (${GEMINI_PRICES.filter(([k]) => k).map(([k, p]) => `${k} ${p.in}/${p.out}`).join(", ")}, unknown models as flash), cache read ${GEMINI_CACHE_READ}x. Not what the Antigravity plan charges.`, "");
 
   L.push(`### Spend by model`, "",
-    `| Scope | Model | Requests | Input | Cache write | Cache read | Output | of which thinking | $ |`,
-    `| :-- | :-- | --: | --: | --: | --: | --: | --: | --: |`);
+    `| Scope | Model | Requests | Input | Cache write | Cache read | Output | of which thinking | Thinking % | $ |`,
+    `| :-- | :-- | --: | --: | --: | --: | --: | --: | --: | --: |`);
   for (const r of [...ag.rows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
-    L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${fmt(r.think)} | ${usd(r.cost)} |`);
-  L.push(`| **total** | | | | | | | | **${usd(ag.cost)}** |`, "");
+    L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${fmt(r.think)} | ${thinkPct(r.think, r.out)} | ${usd(r.cost)} |`);
+  L.push(`| **total** | | | | | | | | ${thinkPct([...ag.rows.values()].reduce((a, r) => a + r.think, 0), [...ag.rows.values()].reduce((a, r) => a + r.out, 0))} | **${usd(ag.cost)}** |`, "");
 
   L.push(`### Kit overhead`, "",
     `Fixed text the kit adds to every main session (~${fmt(tok(ag.kitChars))} tokens). Cost per session = tokens x (input write once + cache read x main turns), at the session's main model.`, "",
@@ -677,6 +691,23 @@ else if (wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} 
 if (totalWaste > kitCost && totalWaste > 0) rec.push(`Late-checkpoint waste (${usd(totalWaste)}) exceeds kit overhead (${usd(kitCost)}): checkpoint earlier (lower CC_WATCH_SOFT/HARD).`);
 if (top10.length && top10[0].chars > 20000) rec.push(`Bounded reads are being skipped: largest tool result is ${fmt(top10[0].chars)} chars (${top10[0].tool}: ${top10[0].hint || "n/a"}).`);
 if (totalSpend && kitCost / totalSpend > 0.05) rec.push(`Kit overhead is ${pct(kitCost)} of spend (> 5%): trim rules/descriptions.`);
+if (ag.status === "ok") {
+  const rows = [...ag.rows.values()];
+  const mainTop = rows.filter((r) => r.scope === "main").sort((a, b) => b.cost - a.cost)[0];
+  const subs = rows.filter((r) => r.scope === "subagent"), subCost = subs.reduce((a, r) => a + r.cost, 0);
+  if (mainTop && subCost > 0) {
+    const same = subs.filter((r) => geminiPrice(r.model).in === geminiPrice(mainTop.model).in).sort((a, b) => b.cost - a.cost);
+    const sameCost = same.reduce((a, r) => a + r.cost, 0);
+    if (sameCost / subCost > 0.5) rec.push(`Antigravity: ${Math.round(100 * sameCost / subCost)}% of subagent spend runs at the main model's price (e.g. ${same[0].model}): route research/collect to flash-lite.`);
+  }
+  const unpriced = [...new Set(rows.filter((r) => geminiKey(r.model) === "").map((r) => r.model))];
+  if (unpriced.length) rec.push(`Unpriced Gemini model(s) priced as flash: ${unpriced.join(", ")}. Add them to GEMINI_PRICES.`);
+  for (const r of rows) if (r.scope === "main" && r.out > 1e5 && r.think / r.out > 0.6) rec.push(`Antigravity ${r.model}: thinking is ${Math.round(100 * r.think / r.out)}% of output: lower effort/thinking budget for routine tasks.`);
+}
+{
+  const mainOn = [...spendRows.values()].filter((r) => r.scope === "main" && family(r.model) === baseFam).reduce((a, r) => a + r.cost, 0);
+  if (mainActual > 0 && stretch(cc) < 1.10 && mainOn / mainActual > 0.9) rec.push(`Claude Code: ${Math.round(100 * mainOn / mainActual)}% of main-session spend is on ${baseFam}, limit stretch only ${stretch(cc).toFixed(2)}x: delegate collect/verify to haiku and spec'd edits to sonnet.`);
+}
 if (!rec.length) rec.push("No rule triggered; the kit looks healthy for this window.");
 for (const r of rec) L.push(`- ${r}`);
 L.push("");
