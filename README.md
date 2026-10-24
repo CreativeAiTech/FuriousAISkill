@@ -38,6 +38,6 @@ Claude Code-only extra: the context-watch hook measures real token growth and tr
 
 ## Token report
 
-`node ~/.agents/tools/tokenReport.mjs [--project <dir>] [--days 30] [--out <dir>] [--summary]` reads Claude Code transcripts and answers whether the kit pays for itself: its fixed per-session overhead versus measured subagent savings, late-checkpoint waste, and the largest tool results, ending with a verdict. Costs are API-list-price equivalents (edit `PRICES` at the top when prices change). Output goes to `<project>/.agents/reports/` (`token-report.md`, `history.csv`, self-ignoring `.gitignore`). The context-watch hook refreshes it at session start when it is over 7 days old and shows the one-line summary.
+`node ~/.agents/tools/tokenReport.mjs [--project <dir>] [--days 30] [--out <dir>] [--summary]` reads Claude Code transcripts and answers whether the kit pays for itself: its fixed per-session overhead versus measured subagent savings, late-checkpoint waste, and the largest tool results, ending with a verdict. Costs are API-list-price equivalents (edit `PRICES` at the top when prices change). Output goes to `<project>/.agents/reports/` (`token-report.md`, `history.csv`, self-ignoring `.gitignore`). The context-watch hook refreshes it at session start once a day (first session of the day) and shows the one-line summary.
 
 Copies on claude.ai (Settings, Capabilities, Skills) can't be synced from here. Re-upload `skills/<name>` after you edit it.

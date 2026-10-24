@@ -38,4 +38,4 @@ Show diffs, short snippets, or links to changed lines; never echo whole files.
 About 20+ turns with heavy tool output, or right after a milestone: checkpoint with `context-compressor` and start fresh (prefer it over `/compact` for long work).
 
 ## 5. Measure, don't guess
-`node ~/.agents/tools/tokenReport.mjs --summary` (Claude Code; refreshes weekly at session start) writes `.agents/reports/token-report.md`: kit overhead vs delegation savings, wasteful spawns, oversized tool results, late checkpoints. Check it before changing these rules.
+`node ~/.agents/tools/tokenReport.mjs --summary` (Claude Code; refreshes daily at session start) writes `.agents/reports/token-report.md`: kit overhead vs delegation savings, wasteful spawns, oversized tool results, late checkpoints. Check it before changing these rules.

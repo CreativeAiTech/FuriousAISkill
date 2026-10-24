@@ -8,7 +8,7 @@
 // SessionStart (startup|clear|compact): if CONTEXT.md exists in the project,
 //   tell Claude it's there so a fresh chat can resume from it.
 //
-// SessionStart (startup): refreshes the weekly token report (tools/tokenReport.mjs)
+// SessionStart (startup): refreshes the daily token report (tools/tokenReport.mjs)
 //   and shows its one-line summary to the user.
 //
 // Thresholds (tokens of growth) can be overridden with env vars
@@ -81,13 +81,13 @@ const k = (n) => Math.round(n / 1000) + "k";
 const input = readStdin();
 const event = input.hook_event_name;
 
-// Weekly token report (startup only): runs the kit tokenReport tool when the
-// project report is missing or older than 7 days. Any failure is silent.
-function weeklyReport(cwd) {
+// Daily token report (startup only): runs the kit tokenReport tool when the
+// project report is missing or was last written on an earlier day. Any failure is silent.
+function dailyReport(cwd) {
   try {
     const report = path.join(cwd, ".agents", "reports", "token-report.md");
     let stale = true;
-    try { stale = Date.now() - fs.statSync(report).mtimeMs > 7 * 86400000; } catch {}
+    try { stale = new Date(fs.statSync(report).mtimeMs).toDateString() !== new Date().toDateString(); } catch {}
     if (!stale) return null;
     const slug = path.resolve(cwd).replace(/[^A-Za-z0-9]/g, "-");
     if (!fs.existsSync(path.join(os.homedir(), ".claude", "projects", slug))) return null;
@@ -120,7 +120,7 @@ if (event === "SessionStart") {
     };
   }
   if (input.source === "startup") {
-    const line = weeklyReport(cwd);
+    const line = dailyReport(cwd);
     if (line) result.systemMessage = line;
   }
   out(result);
