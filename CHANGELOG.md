@@ -11,7 +11,7 @@ Change one lever per release where possible, so a result can be pinned to its ca
 
 **Changes**
 - rules/token-optimization.md §2: unknown location / "what's in this folder" bullet pointing to `npx --yes repomix@1.18.1 --compress --remove-comments --remove-empty-lines --ignore "**/__tests__/**,**/*.test.*" --include "<folder>/**" --stdout` on narrowest folder.
-- tools/tokenReport.mjs: counts `repomix calls: N` in `## Delegation`.
+- tools/tokenReport.mjs: counts `repomix calls: N` in `## Delegation` (real `npx … repomix@` runs only, not commands that merely mention it).
 - README.md: noted in What's inside.
 
 **Why**: AGT-25 / decision `2026-10-24-repomix-replaces-repomap.md`: pack small folders into signatures (~1.4k tokens) without maintaining a custom export mapper or indexing server. Pinned version with usage limits (local only, no remote/mcp).

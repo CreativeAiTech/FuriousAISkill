@@ -349,19 +349,20 @@ for (const s of sessions) {
 }
 const routingTiers = Object.keys(routing).filter((k) => routing[k].n > 0);
 
+const REPOMIX_RE = /\bnpx\b[^|;&\n]*\brepomix@/; // real invocations only, not greps that mention it
 let repomixCalls = 0;
 let repomixOutputChars = 0;
 let repomixWithOutput = 0;
 for (const s of sessions) {
   for (const tu of s.toolUses.values()) {
     const cmd = String((tu.input && (tu.input.command || tu.input.CommandLine)) || "");
-    if (cmd.includes("repomix@")) repomixCalls++;
+    if (REPOMIX_RE.test(cmd)) repomixCalls++;
   }
   for (const r of s.results) {
     const tu = s.toolUses.get(r.id);
     if (!tu) continue;
     const cmd = String((tu.input && (tu.input.command || tu.input.CommandLine)) || "");
-    if (cmd.includes("repomix@")) {
+    if (REPOMIX_RE.test(cmd)) {
       repomixOutputChars += (r.chars || 0);
       repomixWithOutput++;
     }
