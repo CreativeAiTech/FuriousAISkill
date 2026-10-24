@@ -7,6 +7,19 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.6.2 · 2026-10-25 · checkpoint only when something is unsaved
+
+**Changes**
+- hooks/context-watch.cjs: soft/hard notes check git (`status --porcelain`, commits ahead of upstream or `origin/HEAD`/`origin/master`).
+  Clean and pushed → no CONTEXT.md/baton rewrite, just one line "task finished and saved in git, open a fresh chat"
+  (systemMessage: "Work is in git: open a fresh chat."). Dirty, unpushed or git unknown → checkpoint as before.
+- skills/context-compressor 1.2.0: "Nothing left to save" bullet matching the hook.
+
+**Why**: user request. Checkpoints after a finished, pushed task duplicated git history and spent a turn on it.
+
+**Measure**: tested on fake transcripts (clean worktree → fresh-chat line; dirty repo → checkpoint). Next audit: hard-level turns
+that write CONTEXT.md should fall when the tree is clean.
+
 ## 1.6.1 · 2026-10-25 · drop the Repomix lookup bullet (AGT-30 measured: no gain)
 
 **Changes**

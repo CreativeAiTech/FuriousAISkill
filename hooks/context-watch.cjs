@@ -78,6 +78,20 @@ function saveState(id, s) {
   } catch {}
 }
 
+// Is the chat's work already safe in git? Clean tree and nothing unpushed means a
+// checkpoint would only duplicate history, so the hook asks for a plain "open a fresh chat" line instead.
+function gitSaved(cwd) {
+  const run = (args) => {
+    const r = require("child_process").spawnSync("git", args, { cwd, timeout: 3000, encoding: "utf8", windowsHide: true });
+    return r.status === 0 ? String(r.stdout || "").trim() : null;
+  };
+  const status = run(["status", "--porcelain"]);
+  if (status === null) return null; // not a repo or git failed: unknown
+  // No upstream (worktree branches push HEAD:master): compare with the remote default branch instead.
+  const ahead = run(["rev-list", "--count", "@{u}..HEAD"]) ?? run(["rev-list", "--count", "origin/HEAD..HEAD"]) ?? run(["rev-list", "--count", "origin/master..HEAD"]);
+  return status === "" && (ahead === null || ahead === "0");
+}
+
 const k = (n) => Math.round(n / 1000) + "k";
 
 const input = readStdin();
@@ -150,19 +164,27 @@ if (growth < SOFT) {
 }
 
 const stats = `context ~${k(current)} tokens, +${k(growth)} grown in this chat`;
+const saved = gitSaved(input.cwd || process.cwd());
+const freshLine = `"This task is finished and saved in git. This chat is now ~${k(current)} tokens, so continuing here costs more on every turn; please open a fresh chat for the next task."`;
+const savedNote =
+  `Git shows everything committed and pushed. Do NOT write CONTEXT.md, a baton entry or a checkpoint that would only repeat git history. ` +
+  `Only if this chat produced something not yet in a commit, decision note, backlog item or the baton (a decision, a finding, an open question), save just that piece. `;
 
 if (growth >= HARD && (state.level < 2 || growth - state.lastHardAt >= REPEAT)) {
   saveState(input.session_id, { level: 2, lastHardAt: growth });
   out({
-    systemMessage: `context-watch: ${stats}. Checkpoint recommended.`,
+    systemMessage: `context-watch: ${stats}. ${saved ? "Work is in git: open a fresh chat." : "Checkpoint recommended."}`,
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
         `[context-watch v${VERSION}] This conversation is large (${stats}); every turn now resends all of it. ` +
-        `Answer the user's message normally first. Then, at the end of the same reply, use the context-compressor skill: ` +
+        `Answer the user's message normally first. ` +
+        (saved
+          ? savedNote + `Then end the reply with this line (and nothing more about checkpoints): ${freshLine}`
+          : `Then, at the end of the same reply, use the context-compressor skill: ` +
         `write or update CONTEXT.md in the project root, and tell the user in 2-3 lines to run /clear or start a new session in this folder ` +
         `(the new chat is pointed at CONTEXT.md automatically). Include the short paste-ready resume prompt from the skill. ` +
-        `Exception: if you are mid-way through a delicate step whose recent output still matters, finish that step and checkpoint at the next natural break.`,
+        `Exception: if you are mid-way through a delicate step whose recent output still matters, finish that step and checkpoint at the next natural break.`),
     },
   });
 }
@@ -174,8 +196,11 @@ if (growth >= SOFT && state.level < 1) {
       hookEventName: "UserPromptSubmit",
       additionalContext:
         `[context-watch v${VERSION}] Conversation is getting long (${stats}). ` +
-        `Answer normally. If this reply finishes a task or milestone, or the topic is changing, end it with one line offering a checkpoint ` +
-        `("say 'checkpoint' and I'll save CONTEXT.md so you can start fresh"). If not, make that offer at the first later reply that does; don't drop it.`,
+        `Answer normally. If this reply finishes a task or milestone, or the topic is changing, end it with one line: ` +
+        `${saved === false
+          ? `offer a checkpoint ("say 'checkpoint' and I'll save CONTEXT.md so you can start fresh"), saving only what git does not already hold`
+          : `if git then shows everything committed and pushed, skip the checkpoint and say ${freshLine}; otherwise offer a checkpoint of only what git does not hold`}. ` +
+        `If not, make that offer at the first later reply that does; don't drop it.`,
     },
   });
 }

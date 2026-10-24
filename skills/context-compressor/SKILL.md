@@ -2,7 +2,7 @@
 name: context-compressor
 description: Cut token costs by checkpointing a long conversation into a compact CONTEXT.md handoff file, then continuing in a fresh chat, while keeping decisions, requirements, exact errors and reasoning intact. Use whenever the user says "compress", "checkpoint", "save context", "hand off", "start fresh", "this chat is getting long", "too many tokens", "running out of context or quota", "summarize so far", or asks how to keep costs down mid-project. Also use proactively when a conversation has grown long (roughly 30+ turns, many large pastes or tool outputs, or the user re-explains things or corrects the same misunderstanding twice) and starting fresh would be cheaper or more accurate. Works alongside model-orchestrator, which owns model choice; this skill owns what gets carried forward.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Context Compressor
@@ -18,6 +18,7 @@ Two independent reasons to checkpoint. Either one is enough:
 **In Claude Code with the context-watch hook installed**, you'll receive `[context-watch vX]` notes with real token counts. Follow them:
 - **Soft note:** answer normally. If this reply wraps up a task or milestone, or the topic is changing, end it with one line offering a checkpoint. If not, make that offer at the first later reply that does. Don't drop it.
 - **Hard note:** answer normally, then at the end of the same reply write/update `CONTEXT.md` and give the resume instructions below. Don't ask permission first; the user opted in to automatic checkpoints.
+- **Nothing left to save** (the hook says git is clean and pushed, or you checked): don't write `CONTEXT.md` or a baton that would only repeat git history. Save only a decision, finding or open question that isn't yet in a commit, decision note or backlog item. If there's none, end with one line: the task is finished and saved in git, the chat is at ~N tokens so continuing here costs more per turn, please open a fresh chat.
 
 **Without the hook (claude.ai chat, other tools)**, you can't see token counts, so count turns and pastes instead. Count it as **soft** when any of these is true:
 - ~20-25 back-and-forth turns, or a few large pastes, logs, files or tool outputs.
