@@ -43,6 +43,7 @@ Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.age
 ## Updating
 
 Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other machines pick it up on the next `yarn install`.
+For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|major`, `title: ...`, `**Changes**`, `**Why**`, `**Measure**`); feature commits never touch `VERSION` or `CHANGELOG.md`. Run `node tools/release.mjs` to ship.
 
 | Item | Owns |
 | :--- | :--- |
@@ -50,6 +51,7 @@ Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other 
 | `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 | `tools/tokenReport.mjs` | Token report: kit overhead vs measured delegation savings, context hygiene, verdict (see below) |
+| `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |
 
 Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It lives in `hooks/context-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
 

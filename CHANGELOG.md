@@ -6,6 +6,7 @@ Every release that changes behavior records **why** (evidence) and **how it meas
 Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (per-version table, history in
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
+Releases are numbered at ship time by `node tools/release.mjs` from `.changes/<TICKET>.md` fragments; feature commits never edit `VERSION` or `CHANGELOG.md` directly.
 
 ## 1.6.3 · 2026-10-25 · decision notes get a Ripple sweep
 
