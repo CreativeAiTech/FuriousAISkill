@@ -571,6 +571,10 @@ if (agOk) {
   SV.push(sRow(`Antigravity vs ${agBaseline}`, agS), sRow(`Antigravity vs Claude ${baseFam} (rough: different tokenizers, separate plan)`, agC));
   SV.push(sRow("**Total (Claude + Antigravity at own baselines)**", { actual: cc.actual + agS.actual, base: cc.base + agS.base, kit: cc.kit + agS.kit, gross: cc.gross + agS.gross, net: cc.net + agS.net }));
 }
+// Limit stretch: quota tracks cost-weighted tokens, so (baseline without kit) / actual = how much more work fits before a reset.
+const stretch = (r) => (r.actual > 0 ? (r.base - r.kit) / r.actual : 0);
+const lim = (name, r) => `${name} **${stretch(r).toFixed(2)}x** (a 5-hour window lasts ≈${(5 * stretch(r)).toFixed(1)} h of baseline-model work)`;
+SV.splice(2, 0, `**Limit stretch** vs running everything on the baseline: ${lim("Claude Code", cc)}${agOk && ag.cost > 0 ? `; ${lim("Antigravity", agS)}` : ""}. Same for weekly limits.`, "");
 SV.push("", `Where it came from: model choice ${usd(cc.model)} (Claude)${agOk ? ` / ${usd(agS.model)} (Antigravity)` : ""}; delegation ${usd(cc.deleg)}${agOk ? ` / ${usd(agS.deleg)}` : ""}.`, "");
 
 const today = new Date().toISOString().slice(0, 10);
