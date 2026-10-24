@@ -1,6 +1,8 @@
 ---
 name: "model-orchestrator"
 description: Decides who does a task and how cheaply. First WHICH agent (Antigravity Gemini for routine work and all images, Claude Code for architecture, hard bugs, cross-file refactors and review, xAI Grok via MCP for wit, banter and brainstorming), then WHICH model tier inside it, then how to delegate (investigate → plan → implement → verify → review, tight task specs, diff review) and how to hand work across tools. Use whenever the user asks "who should do this", "which agent", "which model", "ask Grok", mentions saving tokens, token limits, quota, auditing token spend, Haiku vs Sonnet vs Opus, delegating to subagents, tagging backlog items, or switching tools mid-project, even if they don't say "orchestrator".
+metadata:
+  version: 1.0.0
 ---
 
 # Model Orchestrator

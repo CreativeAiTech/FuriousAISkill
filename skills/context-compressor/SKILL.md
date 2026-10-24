@@ -1,6 +1,8 @@
 ---
 name: context-compressor
-description: Cut token costs by checkpointing a long conversation into a compact CONTEXT.md handoff file, then continuing in a fresh chat, while keeping decisions, requirements, exact errors and reasoning intact. Use whenever the user says "compress", "checkpoint", "save context", "hand off", "start fresh", "this chat is getting long", "too many tokens", "running out of context or quota", "summarize so far", or asks how to keep costs down mid-project. Also use proactively when a conversation has grown long (roughly 30+ turns, many large pastes or tool outputs, or the user re-explains things) and starting fresh would be cheaper. Works alongside model-orchestrator, which owns model choice; this skill owns what gets carried forward.
+description: Cut token costs by checkpointing a long conversation into a compact CONTEXT.md handoff file, then continuing in a fresh chat, while keeping decisions, requirements, exact errors and reasoning intact. Use whenever the user says "compress", "checkpoint", "save context", "hand off", "start fresh", "this chat is getting long", "too many tokens", "running out of context or quota", "summarize so far", or asks how to keep costs down mid-project. Also use proactively when a conversation has grown long (roughly 30+ turns, many large pastes or tool outputs, or the user re-explains things or corrects the same misunderstanding twice) and starting fresh would be cheaper or more accurate. Works alongside model-orchestrator, which owns model choice; this skill owns what gets carried forward.
+metadata:
+  version: 1.1.0
 ---
 
 # Context Compressor
@@ -9,19 +11,29 @@ Long chats are expensive because every message resends the whole history. This s
 
 ## When to checkpoint (automatic)
 
-**In Claude Code with the context-watch hook installed**, you'll receive `[context-watch]` notes with real token counts. Follow them:
-- **Soft note:** answer normally; add one line offering a checkpoint only if this reply wraps up a task or milestone, or the topic is changing.
+Two independent reasons to checkpoint. Either one is enough:
+- **Cost:** every message re-reads the whole history, so a long chat burns usage limits on every turn.
+- **Drift (any length):** models that take a wrong turn in a conversation rarely recover in it, and a fresh chat started from a consolidated summary does markedly better (see Evidence below). Signals: the user re-explains something settled, corrects the same misunderstanding twice, or you catch yourself contradicting an earlier decision. On a drift signal, offer a checkpoint even in a short chat.
+
+**In Claude Code with the context-watch hook installed**, you'll receive `[context-watch vX]` notes with real token counts. Follow them:
+- **Soft note:** answer normally. If this reply wraps up a task or milestone, or the topic is changing, end it with one line offering a checkpoint. If not, make that offer at the first later reply that does. Don't drop it.
 - **Hard note:** answer normally, then at the end of the same reply write/update `CONTEXT.md` and give the resume instructions below. Don't ask permission first; the user opted in to automatic checkpoints.
 
-**Without the hook (claude.ai chat, other tools)**, you can't see token counts, so judge it yourself. Count it as **soft** when any of these is true:
-- ~20+ back-and-forth turns, or a few large pastes, logs, files or tool outputs.
+**Without the hook (claude.ai chat, other tools)**, you can't see token counts, so count turns and pastes instead. Count it as **soft** when any of these is true:
+- ~20-25 back-and-forth turns, or a few large pastes, logs, files or tool outputs.
 - A task or milestone just finished (feature works, bug fixed, decision made) and the chat is already long.
 - The topic is changing and the old history won't help.
 - The user mentions cost, limits, quota or slowness.
 
-Count it as **hard** when: ~40+ turns, many large pastes, the user re-explains settled things, or you notice yourself losing track of earlier details. On hard, checkpoint at the end of your reply without being asked and output the paste-ready block.
+Count it as **hard** when: ~40+ turns, many large pastes, or any drift signal in an already long chat. On hard, checkpoint at the end of your reply without being asked and output the paste-ready block. In claude.ai, earlier messages may be auto-summarized near the context limit; that prevents overflow but drops exact wording, so it is not a substitute for a checkpoint.
 
 Never interrupt a delicate debugging step where the exact recent output still matters; finish that step first.
+
+### Evidence (why these triggers)
+- Multi-turn drift: across 15 LLMs, performance fell 39% on average when a task was spread over turns instead of given at once; it appears from 2 turns on. Giving the same content in one message recovered ~95%. The authors' advice: start a new chat and consolidate first. (Laban et al., "LLMs Get Lost In Multi-Turn Conversation", 2025, arxiv.org/abs/2505.06120)
+- Length: quality degrades gradually with input length in all 18 models tested, Claude included, with no single cliff (Chroma, "Context Rot", 2025). On non-literal recall, 11 of 13 models fell below half their short-context score by 32K tokens (NoLiMa, 2025, arxiv.org/abs/2502.05167).
+- Cost: the full conversation is sent on every request; `/clear` costs nothing, `/compact` is itself a large request (Claude Code costs docs). Anthropic recommends compaction and external notes for long work ("Effective context engineering for AI agents", 2025).
+- Turn counts above are judgment calls built on these, not measured optima. The hook's token thresholds are measured: see the kit's CHANGELOG.md.
 
 ## The three buckets
 

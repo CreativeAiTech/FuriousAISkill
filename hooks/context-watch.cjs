@@ -12,15 +12,17 @@
 //   and shows its one-line summary to the user.
 //
 // Thresholds (tokens of growth) can be overridden with env vars
-// CC_WATCH_SOFT and CC_WATCH_HARD.
+// CC_WATCH_SOFT and CC_WATCH_HARD (defaults 30k/60k since v1.1.0).
 
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const SOFT = Number(process.env.CC_WATCH_SOFT) || 40000;
-const HARD = Number(process.env.CC_WATCH_HARD) || 80000;
-const REPEAT = 40000; // after hard, remind again every this many extra tokens
+const VERSION = (() => { try { return fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim(); } catch { return "dev"; } })();
+// v1.1.0: 40k/80k/40k -> 30k/60k/30k. One heavy turn adds 30-45k, so the old soft note landed a turn late (CHANGELOG.md).
+const SOFT = Number(process.env.CC_WATCH_SOFT) || 30000;
+const HARD = Number(process.env.CC_WATCH_HARD) || 60000;
+const REPEAT = 30000; // after hard, remind again every this many extra tokens
 const STATE_DIR = path.join(os.homedir(), ".claude", "hooks", "state");
 
 function out(obj) {
@@ -156,7 +158,7 @@ if (growth >= HARD && (state.level < 2 || growth - state.lastHardAt >= REPEAT)) 
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
-        `[context-watch] This conversation is large (${stats}); every turn now resends all of it. ` +
+        `[context-watch v${VERSION}] This conversation is large (${stats}); every turn now resends all of it. ` +
         `Answer the user's message normally first. Then, at the end of the same reply, use the context-compressor skill: ` +
         `write or update CONTEXT.md in the project root, and tell the user in 2-3 lines to run /clear or start a new session in this folder ` +
         `(the new chat is pointed at CONTEXT.md automatically). Include the short paste-ready resume prompt from the skill. ` +
@@ -171,9 +173,9 @@ if (growth >= SOFT && state.level < 1) {
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
-        `[context-watch] Conversation is getting long (${stats}). ` +
-        `Answer normally. If this reply finishes a task or milestone, or the topic is changing, add one line offering a checkpoint ` +
-        `("say 'checkpoint' and I'll save CONTEXT.md so you can start fresh"). Otherwise say nothing about it.`,
+        `[context-watch v${VERSION}] Conversation is getting long (${stats}). ` +
+        `Answer normally. If this reply finishes a task or milestone, or the topic is changing, end it with one line offering a checkpoint ` +
+        `("say 'checkpoint' and I'll save CONTEXT.md so you can start fresh"). If not, make that offer at the first later reply that does; don't drop it.`,
     },
   });
 }

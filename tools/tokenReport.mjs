@@ -784,9 +784,11 @@ try {
   if (!fs.existsSync(gi)) fs.writeFileSync(gi, "*\n");
   const reportPath = path.join(outDir, "token-report.md");
   fs.writeFileSync(reportPath, L.join("\n"));
-  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd," + TREND_COLS.join(",") + "\n";
+  let kitVersion = "";
+  try { kitVersion = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "VERSION"), "utf8").trim(); } catch {}
+  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd," + TREND_COLS.join(",") + ",kit_version\n";
   const agUsd = ag.status === "ok" ? ag.cost.toFixed(2) : "";
-  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2), ...TREND_COLS.map((c) => trendNow[c])].join(",") + "\n";
+  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2), ...TREND_COLS.map((c) => trendNow[c]), kitVersion].join(",") + "\n";
   const old = safeRead(hp);
   if (old && !old.startsWith(header)) fs.writeFileSync(hp, header + old.slice(old.indexOf("\n") + 1)); // upgrade header; old rows leave the new column blank
   fs.appendFileSync(hp, (old ? "" : header) + row);
@@ -794,7 +796,7 @@ try {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
     const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
-    console.log(`Token report (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
+    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""} (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
