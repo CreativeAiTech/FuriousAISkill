@@ -7,6 +7,15 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.1.1 · 2026-10-24 · task-named sessions
+
+**Changes**
+- rules/token-optimization.md §6: rename the session `C-<HHMM>-<ID> <task>` once the task is known.
+
+**Why**: a bare "continue" left every session titled "Continue…", so the sidebar said nothing about the work.
+
+**Measure**: none needed (naming only, no token effect).
+
 ## 1.1.0 · 2026-10-24 · context-watch thresholds and soft-nudge wording
 
 **Changes**
