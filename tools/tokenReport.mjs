@@ -8,7 +8,8 @@
 // Also reads Antigravity (Gemini) conversations from ~/.gemini/antigravity
 // (SQLite + protobuf, via node:sqlite) into a separate section.
 //
-// Usage: node tokenReport.mjs [--project <dir>] [--days 30] [--out <dir>] [--summary]
+// Usage: node tokenReport.mjs [--project <dir>] [--days 30] [--since <ISO date>] [--out <dir>] [--summary]
+// --since defaults to <out>/since.txt when present (a fresh-start baseline); the window is the later of the two.
 // No dependencies. Never throws on odd transcript lines.
 
 import fs from "node:fs";
@@ -44,6 +45,9 @@ const project = path.resolve(arg("project", process.cwd()));
 const days = Number(arg("days", 30)) || 30;
 const outDir = path.resolve(arg("out", path.join(project, ".agents", "reports")));
 const wantSummary = argv.includes("--summary");
+let sinceRaw = arg("since", "");
+if (!sinceRaw) { try { sinceRaw = fs.readFileSync(path.join(outDir, "since.txt"), "utf8").trim(); } catch {} }
+const sinceMs = sinceRaw ? Date.parse(sinceRaw) || 0 : 0;
 
 const home = os.homedir();
 const agentsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -112,7 +116,7 @@ const projectsRoot = path.join(home, ".claude", "projects");
 const slug = project.replace(/[^A-Za-z0-9]/g, "-");
 const dirs = safeDir(projectsRoot).filter((d) => d === slug || d.startsWith(slug + "--claude-worktrees-"))
   .map((d) => path.join(projectsRoot, d));
-const cutoff = Date.now() - days * 86400000;
+const cutoff = Math.max(Date.now() - days * 86400000, sinceMs);
 const sessionFiles = [];
 for (const d of dirs) {
   for (const f of safeDir(d)) {
@@ -528,7 +532,7 @@ const today = new Date().toISOString().slice(0, 10);
 const L = [];
 L.push(`# Token report`, "");
 L.push(`- Project: \`${project}\``);
-L.push(`- Window: last ${days} days, ${sessions.length} sessions with usage (${sessionFiles.length} transcript files)`);
+L.push(`- Window: ${sinceMs > Date.now() - days * 86400000 ? `since ${sinceRaw}` : `last ${days} days`}, ${sessions.length} sessions with usage (${sessionFiles.length} transcript files)`);
 L.push(`- Generated: ${today}`);
 L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, sonnet ${PRICES.sonnet.in}/${PRICES.sonnet.out}, haiku ${PRICES.haiku.in}/${PRICES.haiku.out}); cache write 1.25x (5m) or 2x (1h), cache read 0.1x. These are API-equivalent costs, not what a subscription charges; quota roughly tracks cost-weighted tokens.`, "");
 
@@ -645,7 +649,7 @@ try {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
     const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
-    console.log(`Token report (${days}d, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${agSummary} → ${shown}`);
+    console.log(`Token report (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
