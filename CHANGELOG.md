@@ -7,6 +7,14 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.6.1 · 2026-10-25 · drop the Repomix lookup bullet (AGT-30 measured: no gain)
+
+**Changes**
+- rules/token-optimization.md §2: removed the "Unknown location → repomix" bullet. README bullet removed. The
+  `repomix calls` counter in tokenReport stays (cheap, shows if anyone still runs it).
+
+**Why**: 1.6.0 Measure below failed both keep conditions.
+
 ## 1.6.0 · 2026-10-25 · repo map: pinned Repomix for folder lookups
 
 **Changes**
@@ -17,6 +25,23 @@ Change one lever per release where possible, so a result can be pinned to its ca
 **Why**: AGT-25 / decision `2026-10-24-repomix-replaces-repomap.md`: pack small folders into signatures (~1.4k tokens) without maintaining a custom export mapper or indexing server. Pinned version with usage limits (local only, no remote/mcp).
 
 **Measure**: AGT-30 keep/drop trial (5 lookups, Haiku Explore with/without; keep if <=90% tokens and no worse answers).
+
+Result (2026-10-25, Crownspire, Haiku Explore, 1 run per cell; tokens = input+cache read+cache write+output from the
+subagent transcripts; "cost" weights cache read 0.1, cache write 1.25, output 5 vs input 1):
+
+| Lookup | Tools w/o → with | Tokens w/o → with | Cost-wtd w/o → with | Sec w/o → with | Answer |
+| :-- | :-: | --: | --: | :-: | :-- |
+| 1 shield absorb | 7 → 4 | 853k → 450k | 264k → 102k | 16 → 17 | **worse**: compress hid the body, missed the absorb step in `calculateDamage` |
+| 2 skeleton exports | 3 → 1 | 271k → 193k | 107k → 105k | 19 → 18 | **worse**: compress drops `export const`s and showed the barrel `index.ts` as empty |
+| 3 inventory persist | 4 → 3 | 339k → 361k | 94k → 96k | 8 → 13 | same (needed Grep for `name:` anyway) |
+| 4 pet registry | 4 → 5 | 293k → 485k | 90k → 103k | 8 → 16 | same |
+| 5 Grok model resolve | 3 → 5 | 253k → 492k | 70k → 107k | 7 → 16 | same |
+| **Total** | 21 → 18 | 2.01M → 1.98M (**98.6%**) | 624k → 513k (82%; 114% without lookup 1) | 58 → 80 | 2 worse, 3 same |
+
+Verdict: **drop** (tokens > 90% and two answers worse). Grep already finds names in 3-4 calls here; the pack adds a
+~1.5k-token call plus follow-up Greps, and `--compress` loses exactly what lookups need (bodies, consts, re-exports).
+Repomix stays fine for pasting a folder to a model without repo access (Grok). dependency-cruiser: no (no lookup failed
+for lack of import info).
 
 ## 1.5.0 · 2026-10-25 · routing outcome instrument (GATE lines)
 
