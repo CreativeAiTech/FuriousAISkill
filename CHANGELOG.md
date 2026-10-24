@@ -7,6 +7,17 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.2.0 · 2026-10-24 · experimental task board (opt-in)
+
+**Changes**
+- tools/baton.mjs: file-based task board and handoff baton for several agents on one repo (brief, `--agent` view, `focus` with needs/tag guard, `log`, `claim`/`release`/`block`/`done` with renewable leases, `init`). Config in `<project>/.agents/baton.config.json` (paths, lease days, push mode, ticket ID pattern, agent names). Importable, with brief section hooks for project wrappers.
+- skills/task-board (`metadata.status: experimental`) and hooks/auto-baton.cjs (records sessions that changed files without a baton).
+- sync.mjs: experimental skills and hooks/experimental/<name>.json are synced only after `--enable <name>` (stored in gitignored local.json); `--disable`, `--list`.
+
+**Why**: agents in parallel sessions and tools (Claude Code, Antigravity) took the same ticket and lost handoffs. Extracted from the Crownspire project, where it runs daily; no file-based, cross-tool, daemon-free alternative was found.
+
+**Measure**: off by default, so no token effect unless enabled. When enabled: count collisions (two agents on one ticket) and `auto` baton entries per week in a project's STATE.md history.
+
 ## 1.1.1 · 2026-10-24 · task-named sessions
 
 **Changes**

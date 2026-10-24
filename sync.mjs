@@ -11,6 +11,12 @@
  *   agents/*.md                ->  ~/.claude/agents/<file>           (Claude Code subagents with pinned models)
  *   hooks/claude-hooks.json    -> ~/.claude/settings.json hooks (managed entries only)
  *
+ * EXPERIMENTAL features are opt-in: a skill whose frontmatter has `metadata.status: experimental`, and its hook
+ * manifest hooks/experimental/<name>.json, are synced only when <name> is listed in ~/.agents/local.json (gitignored).
+ *   node ~/.agents/sync.mjs --enable task-board     opt in (writes local.json, then syncs)
+ *   node ~/.agents/sync.mjs --disable task-board    opt out (removes its generated skill copies and hooks)
+ *   node ~/.agents/sync.mjs --list                  show experimental features and whether they are on
+ *
  * Copies (not symlinks) on purpose: both tools read them without extra permissions.
  * Generated copies carry a marker; stale generated copies are removed; hand-written files are never touched.
  */
@@ -86,8 +92,63 @@ function pruneTree(srcDir, dstDir) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Experimental opt-in (local.json is per machine and gitignored)
+// ---------------------------------------------------------------------------
+const LOCAL_FILE = path.join(SRC, "local.json");
+const EXPERIMENTAL_HOOKS = path.join(SRC, "hooks", "experimental");
+
+function readLocal() {
+  try {
+    const data = JSON.parse(read(LOCAL_FILE));
+    return { ...data, experimental: Array.isArray(data.experimental) ? data.experimental : [] };
+  } catch {
+    return { experimental: [] };
+  }
+}
+
+/** `metadata.status: experimental` in a SKILL.md frontmatter. */
+function isExperimentalSkill(name) {
+  const fm = read(path.join(SRC_SKILLS, name, "SKILL.md")).match(/^---\n([\s\S]*?)\n---\n/)?.[1] ?? "";
+  return /^\s+status:\s*["']?experimental["']?\s*$/m.test(fm);
+}
+
+function experimentalFeatures() {
+  const skills = dirs(SRC_SKILLS).filter((n) => fs.existsSync(path.join(SRC_SKILLS, n, "SKILL.md")) && isExperimentalSkill(n));
+  const hooks = fs.existsSync(EXPERIMENTAL_HOOKS) ? fs.readdirSync(EXPERIMENTAL_HOOKS).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)) : [];
+  return [...new Set([...skills, ...hooks])].sort();
+}
+
+function handleOptInFlags(argv) {
+  const features = experimentalFeatures();
+  const local = readLocal();
+  if (argv.includes("--list")) {
+    if (!features.length) console.log("No experimental features in this kit.");
+    for (const f of features) console.log(`${local.experimental.includes(f) ? "[on] " : "[off]"} ${f}`);
+    process.exit(0);
+  }
+  for (const [flag, on] of [["--enable", true], ["--disable", false]]) {
+    if (!argv.includes(flag)) continue;
+    const name = argv[argv.indexOf(flag) + 1];
+    if (!name || !features.includes(name)) {
+      console.error(`${flag} needs one of: ${features.join(", ") || "(none available)"}`);
+      process.exit(1);
+    }
+    const set = new Set(local.experimental);
+    on ? set.add(name) : set.delete(name);
+    local.experimental = [...set].sort();
+    fs.writeFileSync(LOCAL_FILE, JSON.stringify(local, null, 2) + "\n", "utf-8");
+    console.log(`${on ? "Enabled" : "Disabled"} experimental feature: ${name} (${path.basename(LOCAL_FILE)})`);
+  }
+  return new Set(local.experimental);
+}
+
+const ENABLED = handleOptInFlags(process.argv.slice(2));
+
 function syncSkills() {
-  const names = dirs(SRC_SKILLS).filter((n) => fs.existsSync(path.join(SRC_SKILLS, n, "SKILL.md")));
+  const names = dirs(SRC_SKILLS).filter(
+    (n) => fs.existsSync(path.join(SRC_SKILLS, n, "SKILL.md")) && (!isExperimentalSkill(n) || ENABLED.has(n))
+  );
   for (const target of SKILL_TARGETS) {
     for (const name of names) {
       const dst = path.join(target, name);
@@ -215,8 +276,20 @@ function syncHooks() {
     hooks[event] = hooks[event].filter((entry) => !isManaged(entry));
     if (!hooks[event].length) delete hooks[event];
   }
-  for (const [event, entries] of Object.entries(manifest)) {
-    hooks[event] = [...(hooks[event] || []), ...entries];
+  const manifests = [manifest];
+  for (const name of ENABLED) {
+    const file = path.join(EXPERIMENTAL_HOOKS, `${name}.json`);
+    if (!fs.existsSync(file)) continue;
+    try {
+      manifests.push(JSON.parse(read(file).split("{{AGENTS}}").join(agentsPath)));
+    } catch (err) {
+      report.skipped.push(`${rel(file)} (invalid JSON: ${err.message})`);
+    }
+  }
+  for (const m of manifests) {
+    for (const [event, entries] of Object.entries(m)) {
+      hooks[event] = [...(hooks[event] || []), ...entries];
+    }
   }
   settings.hooks = hooks;
 
