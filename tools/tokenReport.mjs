@@ -45,6 +45,9 @@ const project = path.resolve(arg("project", process.cwd()));
 const days = Number(arg("days", 30)) || 30;
 const outDir = path.resolve(arg("out", path.join(project, ".agents", "reports")));
 const wantSummary = argv.includes("--summary");
+const baseArg = String(arg("baseline", "opus")).toLowerCase();
+const baseFam = PRICES[baseArg] ? baseArg : "opus"; // Claude baseline family
+const agBaseline = String(arg("ag-baseline", "pro")).toLowerCase(); // Gemini baseline (substring of model name)
 let sinceRaw = arg("since", "");
 if (!sinceRaw) { try { sinceRaw = fs.readFileSync(path.join(outDir, "since.txt"), "utf8").trim(); } catch {} }
 const sinceMs = sinceRaw ? Date.parse(sinceRaw) || 0 : 0;
@@ -256,9 +259,9 @@ function addSpend(scope, model, u) {
 
 // ---------- delegation ----------
 const spawnRows = [];
-let totalSpawns = 0;
+let totalSpawns = 0, baseMain = 0; // baseMain: all main turns repriced at the baseline family
 for (const s of sessions) {
-  for (const t of s.turns) addSpend("main", t.model, t.usage);
+  for (const t of s.turns) { addSpend("main", t.model, t.usage); baseMain += costOf(baseFam, t.usage); }
   for (const sp of s.spawns) {
     totalSpawns++;
     const type = sp.input.subagent_type || "general-purpose";
@@ -284,7 +287,8 @@ for (const s of sessions) {
     // Inline = the same round-trips in the main session (main context + work so far, re-read each time),
     // the work written once, then carried on every remaining main turn.
     const inline = carried * readPrice(s.mainModel) + (out + G) * writePrice(s.mainModel) + G * readPrice(s.mainModel) * remaining;
-    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), actual, inline, savings: inline - actual });
+    const inlineBase = carried * readPrice(baseFam) + (out + G) * writePrice(baseFam) + G * readPrice(baseFam) * remaining;
+    spawnRows.push({ session: s.id, type, model: family(model), desc: String(sp.input.description || "").slice(0, 60), actual, inline, inlineBase, savings: inline - actual });
   }
 }
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
@@ -512,7 +516,10 @@ if (agFiles.length) {
       // Spawn position is unknown: assume mid-session (as for mainCtx), so half the parent's turns remain.
       const remaining = parent ? Math.floor(parent.turns.length / 2) : 5;
       const inline = carried * mainReadPrice + (totalOut + G) * (pMain.in / 1e6) + G * mainReadPrice * remaining;
+      const pBase = geminiPrice(agBaseline), baseRead = pBase.in * GEMINI_CACHE_READ / 1e6;
+      const inlineBase = carried * baseRead + (totalOut + G) * (pBase.in / 1e6) + G * baseRead * remaining;
       ag.spawns.push({
+        carried, totalOut, G, remaining, inlineBase,
         session: sub.id.slice(0, 8),
         type: sub.type,
         model: sub.turns[0]?.model || "flash-lite",
@@ -528,6 +535,44 @@ if (agFiles.length) {
   } catch { ag.status = "unreadable"; }
 }
 
+// ---------- savings summary: same tokens repriced on one default model ----------
+// Claude: baseline = main turns at baseFam + every spawn priced inline. Spawns skipped by the "else continue" branch have no spend
+// in totalSpend and no spawnRows entry, so they add nothing to either side: gross = (baseMain - mainActual) + sum(inlineBase - actual) exactly.
+const kitCost = globalCost + projectCost;
+const mainActual = [...spendRows.values()].filter((r) => r.scope === "main").reduce((a, r) => a + r.cost, 0);
+const cc = { actual: totalSpend, base: baseMain + spawnRows.reduce((a, r) => a + r.inlineBase, 0), kit: kitCost,
+  model: baseMain - mainActual, deleg: spawnRows.reduce((a, r) => a + (r.inlineBase - r.actual), 0) };
+cc.gross = cc.base - cc.actual; cc.net = cc.gross - cc.kit;
+const agS = { actual: ag.cost, base: 0, kit: ag.kitCost, model: 0, deleg: 0, gross: 0, net: 0 };
+const agC = { actual: ag.cost, base: 0, kit: ag.kitCost, gross: 0, net: 0 };
+if (ag.status === "ok") {
+  const pB = geminiPrice(agBaseline), pC = PRICES[baseFam];
+  let mainBase = 0, mainAct = 0, mainClaude = 0;
+  for (const s of ag.mainSessions) for (const t of s.turns) {
+    mainBase += (t.inp * pB.in + t.cw * pB.in + t.cr * pB.in * GEMINI_CACHE_READ + t.out * pB.out) / 1e6;
+    mainClaude += (t.inp * pC.in + t.cw * pC.in + t.cr * pC.in * 0.1 + t.out * pC.out) / 1e6;
+    mainAct += t.cost;
+  }
+  const cRead = pC.in * 0.1 / 1e6;
+  const subClaude = ag.spawns.reduce((a, r) => a + r.carried * cRead + (r.totalOut + r.G) * (pC.in / 1e6) + r.G * cRead * r.remaining, 0);
+  agS.base = mainBase + ag.spawns.reduce((a, r) => a + r.inlineBase, 0);
+  agS.model = mainBase - mainAct; agS.deleg = ag.spawns.reduce((a, r) => a + (r.inlineBase - r.actual), 0);
+  agS.gross = agS.base - agS.actual; agS.net = agS.gross - agS.kit;
+  agC.base = mainClaude + subClaude; agC.gross = agC.base - agC.actual; agC.net = agC.gross - agC.kit;
+}
+const npct = (r) => (r.base > 0 ? (100 * r.net / r.base).toFixed(1) + "%" : "n/a");
+const sRow = (name, r) => `| ${name} | ${usd(r.actual)} | ${usd(r.base)} | ${usd(r.gross)} | ${usd(r.kit)} | ${usd(r.net)} | ${npct(r)} |`;
+const agOk = ag.status === "ok";
+const SV = [`## Savings summary`, "",
+  `Baseline = every request on one default model: Claude \`${baseFam}\`, Antigravity \`${agBaseline}\`. Same tokens repriced; subagent work priced as if done inline in the main session. Effort level (medium/high) is not repriced: it changes token counts, which the transcripts can't replay. API-equivalent $, not subscription charges.`, "",
+  `| Tool | Actual | Baseline | Saved (gross) | Kit overhead | Saved (net) | Net % |`, `| :-- | --: | --: | --: | --: | --: | --: |`,
+  sRow(`Claude Code vs ${baseFam}`, cc)];
+if (agOk) {
+  SV.push(sRow(`Antigravity vs ${agBaseline}`, agS), sRow(`Antigravity vs Claude ${baseFam} (rough: different tokenizers, separate plan)`, agC));
+  SV.push(sRow("**Total (Claude + Antigravity at own baselines)**", { actual: cc.actual + agS.actual, base: cc.base + agS.base, kit: cc.kit + agS.kit, gross: cc.gross + agS.gross, net: cc.net + agS.net }));
+}
+SV.push("", `Where it came from: model choice ${usd(cc.model)} (Claude)${agOk ? ` / ${usd(agS.model)} (Antigravity)` : ""}; delegation ${usd(cc.deleg)}${agOk ? ` / ${usd(agS.deleg)}` : ""}.`, "");
+
 const today = new Date().toISOString().slice(0, 10);
 const L = [];
 L.push(`# Token report`, "");
@@ -536,6 +581,7 @@ L.push(`- Window: ${sinceMs > Date.now() - days * 86400000 ? `since ${sinceRaw}`
 L.push(`- Generated: ${today}`);
 L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, sonnet ${PRICES.sonnet.in}/${PRICES.sonnet.out}, haiku ${PRICES.haiku.in}/${PRICES.haiku.out}); cache write 1.25x (5m) or 2x (1h), cache read 0.1x. These are API-equivalent costs, not what a subscription charges; quota roughly tracks cost-weighted tokens.`, "");
 
+L.push(...SV);
 L.push(`## Spend by model`, "", `| Scope | Model | Requests | Input | Cache write | Cache read | Output | $ |`, `| :-- | :-- | --: | --: | --: | --: | --: | --: |`);
 for (const r of [...spendRows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
   L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${usd(r.cost)} |`);
@@ -612,10 +658,10 @@ L.push(`| **total** | | | | | **${usd(totalWaste)}** |`, "", `**Top 10 largest t
 for (const r of top10) L.push(`| ${r.session} | ${r.tool} | ${r.hint.replace(/\|/g, "\\|")} | ${fmt(r.chars)} | ${usd(r.cost)} |`);
 L.push("");
 
-const kitCost = globalCost + projectCost;
 L.push(`## Verdict`, "",
   `- Claude Code kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} spend); delegation savings: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
   ` Savings / overhead ratio: ${kitCost > 0 ? (delegationSavings / kitCost).toFixed(2) : "n/a"}.`);
+L.push(`- Net saved vs ${baseFam}: **${usd(cc.net)}** (${npct(cc)} of baseline).`);
 if (ag.status === "ok") {
   const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
   L.push(`- Antigravity kit overhead: **${usd(ag.kitCost)}** (${agPct(ag.kitCost)} of ${usd(ag.cost)} spend); delegation savings: **${usd(ag.delegationSavings)}** over ${ag.spawns.length} subagent runs.`);
@@ -639,9 +685,9 @@ try {
   const reportPath = path.join(outDir, "token-report.md");
   fs.writeFileSync(reportPath, L.join("\n"));
   const hp = path.join(outDir, "history.csv");
-  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd\n";
+  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd\n";
   const agUsd = ag.status === "ok" ? ag.cost.toFixed(2) : "";
-  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd].join(",") + "\n";
+  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2)].join(",") + "\n";
   const old = safeRead(hp);
   if (old && !old.startsWith(header)) fs.writeFileSync(hp, header + old.slice(old.indexOf("\n") + 1)); // upgrade header; old rows leave the new column blank
   fs.appendFileSync(hp, (old ? "" : header) + row);
@@ -649,7 +695,7 @@ try {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
     const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
-    console.log(`Token report (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${agSummary} → ${shown}`);
+    console.log(`Token report (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
