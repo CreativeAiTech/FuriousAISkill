@@ -8,6 +8,9 @@
 // SessionStart (startup|clear|compact): if CONTEXT.md exists in the project,
 //   tell Claude it's there so a fresh chat can resume from it.
 //
+// SessionStart (startup): refreshes the weekly token report (tools/tokenReport.mjs)
+//   and shows its one-line summary to the user.
+//
 // Thresholds (tokens of growth) can be overridden with env vars
 // CC_WATCH_SOFT and CC_WATCH_HARD.
 
@@ -78,22 +81,49 @@ const k = (n) => Math.round(n / 1000) + "k";
 const input = readStdin();
 const event = input.hook_event_name;
 
-if (event === "SessionStart") {
-  const ctx = path.join(input.cwd || process.cwd(), "CONTEXT.md");
-  if (!fs.existsSync(ctx)) out({});
-  let header = "";
+// Weekly token report (startup only): runs the kit tokenReport tool when the
+// project report is missing or older than 7 days. Any failure is silent.
+function weeklyReport(cwd) {
   try {
-    header = fs.readFileSync(ctx, "utf8").split("\n").slice(0, 2).join(" ").trim();
-  } catch {}
-  out({
-    hookSpecificOutput: {
+    const report = path.join(cwd, ".agents", "reports", "token-report.md");
+    let stale = true;
+    try { stale = Date.now() - fs.statSync(report).mtimeMs > 7 * 86400000; } catch {}
+    if (!stale) return null;
+    const slug = path.resolve(cwd).replace(/[^A-Za-z0-9]/g, "-");
+    if (!fs.existsSync(path.join(os.homedir(), ".claude", "projects", slug))) return null;
+    const tool = path.join(__dirname, "..", "tools", "tokenReport.mjs");
+    const r = require("child_process").spawnSync(process.execPath, [tool, "--project", cwd, "--summary"], {
+      timeout: 6000, encoding: "utf8", windowsHide: true,
+    });
+    const line = r.status === 0 ? String(r.stdout || "").trim().split(String.fromCharCode(10)).pop() : "";
+    return line || null;
+  } catch {
+    return null;
+  }
+}
+
+if (event === "SessionStart") {
+  const cwd = input.cwd || process.cwd();
+  const result = {};
+  const ctx = path.join(cwd, "CONTEXT.md");
+  if (fs.existsSync(ctx)) {
+    let header = "";
+    try {
+      header = fs.readFileSync(ctx, "utf8").split(String.fromCharCode(10)).slice(0, 2).join(" ").trim();
+    } catch {}
+    result.hookSpecificOutput = {
       hookEventName: "SessionStart",
       additionalContext:
         `A context checkpoint exists at CONTEXT.md (${header}). ` +
         `If the user's request continues that work (e.g. "continue", "resume"), read it first and start from its Next step. ` +
         `If the request is unrelated, ignore it.`,
-    },
-  });
+    };
+  }
+  if (input.source === "startup") {
+    const line = weeklyReport(cwd);
+    if (line) result.systemMessage = line;
+  }
+  out(result);
 }
 
 if (event !== "UserPromptSubmit" || !input.transcript_path || !input.session_id) out({});

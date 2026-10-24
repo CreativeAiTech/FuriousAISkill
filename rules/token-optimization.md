@@ -1,38 +1,41 @@
 # Global Orchestration & Token Rules (all projects, all tools)
 
-Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, with one exception: the default top-tier areas (`model-orchestrator` Step 4) are a floor. Projects may add areas; lowering one needs an explicit written reason in the project's rules. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
+Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, except that the default top-tier areas (`model-orchestrator` Step 4) are a floor: projects may add areas, and lowering one needs a written reason in the project's rules. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
 
-## 1. Orchestrator-first (always on, decide before acting)
-The main session is the **brain**: it classifies, plans, writes specs, and reviews. Cheaper subagents do the legwork. Before the first tool call on any request, pick a route and state it in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
+## 1. Orchestrator-first (decide before acting)
+The main session is the **brain**: it classifies, plans, writes specs and reviews; cheaper subagents do the legwork. Before the first tool call on a request, state the route in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
 
-| Work | Who does it |
+| Work | Who |
 | :--- | :--- |
-| **Trivial**: answer from context already loaded, ≤2 quick tool calls, a one-line edit | Brain inline. A spawn costs more than the task |
-| **Collect**: search, read 3+ files, logs, git history, web, inventories | Small read-only subagent. It returns paths, line numbers, facts, not file dumps |
-| **Mechanical or well-specified edits**, in any number of files | Worker subagent with a tight spec (goal, files, constraints, done-when) |
-| **Verify**: typecheck, tests, lint, build | Small verifier subagent. It returns pass/fail in ≤3 lines |
-| **Judgment**: architecture, unknown-cause bugs, ambiguity, security, final review | Brain thinks and specs; a worker implements; the brain reviews the **diff** only |
+| **Trivial**: answer from loaded context, ≤2 quick tool calls, a one-line edit | Brain inline (a spawn costs more) |
+| **Collect**: search, read 3+ files, logs, git history, web, inventories | Small read-only subagent; returns paths, lines, facts, not dumps |
+| **Mechanical or well-specified edits**, any number of files | Worker with a tight spec (goal, files, constraints, done-when) |
+| **Verify**: typecheck, tests, lint, build | Small verifier; pass/fail in ≤3 lines |
+| **Judgment**: architecture, unknown-cause bugs, ambiguity, security, final review | Brain specs, worker implements, brain reviews the **diff** only |
 
-- Run independent subagents in parallel. Give each only the files it needs.
-- A worker that fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
-- **Hard work has a minimum tier: the top one** (Opus / Pro class, high effort). That covers architecture or design decisions, anything costly to reverse, a bug still unexplained after one real attempt, the same error twice, conflicting constraints, and security, data-loss or money risk. Projects may list more top-tier areas. Check the model you are *actually* on before each such decision, not only at session start: tools fall back to a smaller model silently when quota runs out.
-- **Decide high, execute low, never guess.** Below the required tier, escalate if you can: Claude Code → a subagent with `model: "opus"`, `effort: "max"` (ask first if it's more than a contained question, since it spends the shared quota); Antigravity → the Pro-class model in the picker, or `@claude`. The top model writes its decision down (decision note or spec); lower tiers quote or link it verbatim and carry it out, never re-decide it. A new decision point mid-execution → escalate again.
-- **Can't escalate** (top tier unavailable, out of quota, call failed)? Never decide below tier. Hard to reverse → stop, tell the user to wait for the reset or switch models, and queue the item for a top-tier agent. Reversible → offer a labeled **DRAFT** (your model, "below required tier", confidence, unknowns), commit nothing irreversible, queue a top-tier review. Same when the user says "do it anyway". Details: `model-orchestrator` Step 4.
-- The user never names a model. Pick the smallest that can do the job well.
+- Run independent subagents in parallel, each with only the files it needs.
+- A worker fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
+- **Hard work needs the top tier** (Opus / Pro class, high effort): architecture or design decisions, anything costly to reverse, a bug unexplained after one real attempt, the same error twice, conflicting constraints, security, data-loss or money risk, plus any area the project adds. Check the model you're *actually* on before each such decision: tools silently fall back to a smaller model when quota runs out.
+- **Decide high, execute low, never guess.** Below the required tier, escalate: Claude Code → subagent with `model: "opus"`, `effort: "max"` (ask first unless it's a contained question; it spends shared quota); Antigravity → the Pro-class model, or `@claude`. The top model writes the decision down (decision note or spec); lower tiers link or quote it and carry it out, never re-decide. A new decision point mid-execution → escalate again.
+- **Can't escalate** (top tier unavailable, out of quota, call failed)? Never decide below tier. Hard to reverse → stop, tell the user to wait for the reset or switch models, queue it for a top-tier agent. Reversible → offer a labeled **DRAFT** (your model, "below required tier", confidence, unknowns), commit nothing irreversible, queue a top-tier review. Same when the user says "do it anyway". Details: `model-orchestrator` Step 4.
+- The user never names a model: pick the smallest that does the job well.
 
 | Tool | Small (collect, verify) | Mid (implement) | Brain |
 | :--- | :--- | :--- | :--- |
-| Claude Code | `Explore` or `verifier` agent (haiku) | `worker` agent (sonnet) | main session (opus) |
+| Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session (opus) |
 | Antigravity | `research` / `flash_lite` | `flash` (`pro` for subtle edits) | main session |
 
-Details (agent choice across tools, task specs, handoff): the `model-orchestrator` skill.
+Agent choice across tools, task specs, handoff: `model-orchestrator`.
 
 ## 2. Bounded tool use
 - Read targeted line ranges, not whole files. Never read lockfiles, `*.map`, binaries, or build output (`dist/`, `build/`, `out/`, `node_modules/`).
-- Cap noisy output at the source (`| head -n 30`, `| Select-Object -First 30`) and use `--quiet` / `-q` flags.
+- Cap noisy output at the source (`| head -n 30`, `| Select-Object -First 30`, `--quiet` / `-q`).
 
 ## 3. Concise replies
-Show diffs, short snippets, or links to changed lines, never whole files echoed back.
+Show diffs, short snippets, or links to changed lines; never echo whole files.
 
 ## 4. Checkpoint long chats
-When a chat gets long (about 20+ turns with heavy tool output, or a milestone has just landed), checkpoint with `context-compressor` and start fresh. Prefer that over `/compact` for long-running work.
+About 20+ turns with heavy tool output, or right after a milestone: checkpoint with `context-compressor` and start fresh (prefer it over `/compact` for long work).
+
+## 5. Measure, don't guess
+`node ~/.agents/tools/tokenReport.mjs --summary` (Claude Code; refreshes weekly at session start) writes `.agents/reports/token-report.md`: kit overhead vs delegation savings, wasteful spawns, oversized tool results, late checkpoints. Check it before changing these rules.
