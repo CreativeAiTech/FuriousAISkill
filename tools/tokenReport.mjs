@@ -5,6 +5,9 @@
 // Costs are API-list-price equivalents; on a subscription, quota roughly
 // tracks cost-weighted tokens.
 //
+// Also reads Antigravity (Gemini) conversations from ~/.gemini/antigravity
+// (SQLite + protobuf, via node:sqlite) into a separate section.
+//
 // Usage: node tokenReport.mjs [--project <dir>] [--days 30] [--out <dir>] [--summary]
 // No dependencies. Never throws on odd transcript lines.
 
@@ -19,6 +22,15 @@ const PRICES = {
   sonnet: { in: 3, out: 15 },
   haiku: { in: 1, out: 5 },
 };
+// Antigravity (Gemini) $/MTok, API-equivalent estimates; edit when prices change.
+// Matched by substring of the model name, first hit wins; cache reads at GEMINI_CACHE_READ x input.
+const GEMINI_PRICES = [
+  ["flash-lite", { in: 0.1, out: 0.4 }],
+  ["flash", { in: 0.5, out: 3 }],
+  ["pro", { in: 2, out: 12 }],
+  ["", { in: 0.5, out: 3 }], // unknown model (e.g. trial codenames): priced as flash
+];
+const GEMINI_CACHE_READ = 0.1;
 const CHARS_PER_TOKEN = 3.8;
 const SOFT = Number(process.env.CC_WATCH_SOFT) || 40000;
 
@@ -352,6 +364,69 @@ const totalSpend = [...spendRows.values()].reduce((a, r) => a + r.cost, 0);
 const pct = (x) => (totalSpend ? (100 * x / totalSpend).toFixed(1) : "0.0") + "%";
 
 // ---------- markdown ----------
+// ---------- Antigravity (Gemini) ----------
+// One SQLite DB per conversation in ~/.gemini/antigravity/conversations/<uuid>.db.
+// Blobs are protobuf; field numbers verified against real DBs (2026-10-24):
+//   trajectory_metadata_blob['main']: 1.1 = workspace file URI, 2.1 = created (unix s)
+//   gen_metadata.data (one row per model call): 1.19 = model name, 1.4 = usage stats:
+//     2 input (uncached), 3 output (= 9 thinking + 10 response), 5 cache read, 4 cache write
+// Any read error marks the store unreadable; it never touches the Claude section.
+const ag = { status: "none", sessions: 0, skipped: 0, rows: new Map(), cost: 0 };
+function pbVarint(b, i) { let r = 0, m = 1; for (;;) { if (i >= b.length) throw new Error("pb: eof"); const x = b[i++]; r += (x & 0x7f) * m; m *= 128; if (!(x & 0x80)) return [r, i]; } }
+function pbFields(b) {
+  const o = {}; let i = 0;
+  while (i < b.length) {
+    let t; [t, i] = pbVarint(b, i);
+    const f = Math.floor(t / 8), w = t % 8; let v;
+    if (w === 0) [v, i] = pbVarint(b, i);
+    else if (w === 2) { let l; [l, i] = pbVarint(b, i); if (i + l > b.length) throw new Error("pb: len"); v = b.subarray(i, i + l); i += l; }
+    else if (w === 1) { i += 8; continue; }
+    else if (w === 5) { i += 4; continue; }
+    else throw new Error("pb: wire type " + w);
+    (o[f] ??= []).push(v);
+  }
+  return o;
+}
+const geminiPrice = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[1];
+const normPath = (p) => path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+const agDir = path.join(home, ".gemini", "antigravity", "conversations");
+const agFiles = safeDir(agDir).filter((f) => f.endsWith(".db"));
+if (agFiles.length) {
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const want = normPath(project);
+    let readable = 0;
+    for (const f of agFiles) {
+      const fp = path.join(agDir, f);
+      let db;
+      try {
+        if (fs.statSync(fp).mtimeMs < cutoff) continue;
+        db = new DatabaseSync(fp, { readOnly: true });
+        const meta = pbFields(Buffer.from(db.prepare("SELECT data FROM trajectory_metadata_blob WHERE id = 'main'").get().data));
+        const uri = pbFields(meta[1][0])[1][0].toString();
+        readable++;
+        const ws = normPath(fileURLToPath(uri));
+        if (ws !== want && !ws.startsWith(want + "/")) continue; // other project
+        let reqs = 0;
+        for (const r of db.prepare("SELECT data FROM gen_metadata").all()) {
+          const g = pbFields(pbFields(Buffer.from(r.data))[1][0]);
+          if (!g[4]) continue;
+          const u = pbFields(g[4][0]), n = (k) => u[k]?.[0] ?? 0;
+          if (!u[2] && !u[3]) continue; // aborted call, no usage
+          const model = g[19]?.[0]?.toString() || "unknown";
+          const p = geminiPrice(model);
+          const cost = (n(2) * p.in + n(4) * p.in + n(5) * p.in * GEMINI_CACHE_READ + n(3) * p.out) / 1e6;
+          const row = ag.rows.get(model) || { model, req: 0, inp: 0, cw: 0, cr: 0, out: 0, think: 0, cost: 0 };
+          row.req++; row.inp += n(2); row.cw += n(4); row.cr += n(5); row.out += n(3); row.think += n(9); row.cost += cost;
+          ag.rows.set(model, row); ag.cost += cost; reqs++;
+        }
+        if (reqs) ag.sessions++;
+      } catch { ag.skipped++; } finally { try { db?.close(); } catch {} }
+    }
+    ag.status = readable || !ag.skipped ? "ok" : "unreadable";
+  } catch { ag.status = "unreadable"; }
+}
+
 const today = new Date().toISOString().slice(0, 10);
 const L = [];
 L.push(`# Token report`, "");
@@ -364,6 +439,18 @@ L.push(`## Spend by model`, "", `| Scope | Model | Requests | Input | Cache writ
 for (const r of [...spendRows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
   L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${usd(r.cost)} |`);
 L.push(`| **total** | | | | | | | **${usd(totalSpend)}** |`, "");
+
+L.push(`## Antigravity (Gemini)`, "");
+if (ag.status === "none") L.push(`No Antigravity conversations found in \`~/.gemini/antigravity/conversations\`.`, "");
+else if (ag.status === "unreadable") L.push(`**Antigravity: usage not readable (format unknown).** The kit's protobuf field map no longer matches; re-verify it in tokenReport.mjs.`, "");
+else {
+  L.push(`${ag.sessions} conversations with usage in this project (window by file mtime)${ag.skipped ? `; ${ag.skipped} unreadable DBs skipped` : ""}. Antigravity reports input excluding cache reads; thinking is part of output. Prices: estimated Gemini API list $/MTok (${GEMINI_PRICES.filter(([k]) => k).map(([k, p]) => `${k} ${p.in}/${p.out}`).join(", ")}, unknown models as flash), cache read ${GEMINI_CACHE_READ}x. Not what the Antigravity plan charges.`, "",
+    `| Model | Requests | Input | Cache write | Cache read | Output | of which thinking | $ |`, `| :-- | --: | --: | --: | --: | --: | --: | --: |`);
+  for (const r of [...ag.rows.values()].sort((a, b) => b.cost - a.cost))
+    L.push(`| ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${fmt(r.think)} | ${usd(r.cost)} |`);
+  L.push(`| **total** | | | | | | | **${usd(ag.cost)}** |`, "",
+    `Kit overhead and delegation savings above are Claude Code only: Antigravity transcripts don't expose the system prompt or subagent boundaries in a form this report can measure yet.`, "");
+}
 
 L.push(`## Kit overhead`, "", `Fixed text the kit adds to every session. Cost per session = tokens x (cache write once + cache read x main turns), at the session's main model.`, "",
   `| Item | Scope | Chars | ≈Tokens |`, `| :-- | :-- | --: | --: |`);
@@ -421,13 +508,16 @@ try {
   const reportPath = path.join(outDir, "token-report.md");
   fs.writeFileSync(reportPath, L.join("\n"));
   const hp = path.join(outDir, "history.csv");
-  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns\n";
-  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length].join(",") + "\n";
-  fs.appendFileSync(hp, (fs.existsSync(hp) ? "" : header) + row);
+  const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd\n";
+  const agUsd = ag.status === "ok" ? ag.cost.toFixed(2) : "";
+  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd].join(",") + "\n";
+  const old = safeRead(hp);
+  if (old && !old.startsWith(header)) fs.writeFileSync(hp, header + old.slice(old.indexOf("\n") + 1)); // upgrade header; old rows leave the new column blank
+  fs.appendFileSync(hp, (old ? "" : header) + row);
   if (wantSummary) {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
-    console.log(`Token report (${days}d, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} → ${shown}`);
+    console.log(`Token report (${days}d, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns) · late-checkpoint waste ${usd(totalWaste)} · Antigravity ${ag.status === "ok" ? `${usd(ag.cost)} (${ag.sessions} convs)` : ag.status === "none" ? "none" : "not readable"} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
