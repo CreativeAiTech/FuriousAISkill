@@ -25,7 +25,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const DEFAULTS = {
   project: "",
@@ -45,6 +45,17 @@ export const DEFAULTS = {
 const AUTO_BATON = ".agents/auto-baton.json"; // written by the kit's auto-baton hook
 const CONFIG_FILE = ".agents/baton.config.json";
 const VALID_STATUSES = ["idle", "in-progress", "blocked", "needs-review", "done"];
+
+/**
+ * Registers the merge driver (batonMerge.mjs next to this file) so parallel branches merge STATE.md / BACKLOG.md
+ * per log entry and per ticket instead of conflicting. Only when unset, so a project's own registration wins.
+ */
+function ensureMergeDriver(ctx) {
+  if (git(ctx, ["config", "--get", "merge.baton.driver"])) return;
+  const driver = path.join(path.dirname(fileURLToPath(import.meta.url)), "batonMerge.mjs").replace(/\\/g, "/");
+  git(ctx, ["config", "merge.baton.name", "task-board files (STATE.md, BACKLOG.md) semantic merge"]);
+  git(ctx, ["config", "merge.baton.driver", `node "${driver}" %O %A %B %P`]);
+}
 
 // ---------------------------------------------------------------------------
 // Setup
@@ -734,6 +745,15 @@ function initProject(root, flags) {
     fs.writeFileSync(gi, giText + (giText && !giText.endsWith("\n") ? "\n" : "") + `${AUTO_BATON}\n`, "utf-8");
     created.push(`.gitignore (+${AUTO_BATON})`);
   }
+  const ga = path.join(root, ".gitattributes");
+  const gaText = readText(ga);
+  const want = [ctx.stateRel, ctx.backlogRel].map((rel) => `${rel} merge=baton`);
+  const missing = want.filter((w) => !gaText.split("\n").some((l) => l.trim() === w));
+  if (missing.length) {
+    fs.writeFileSync(ga, gaText + (gaText && !gaText.endsWith("\n") ? "\n" : "") + missing.join("\n") + "\n", "utf-8");
+    created.push(`.gitattributes (+merge=baton)`);
+  }
+  ensureMergeDriver(ctx);
   if (created.length) console.log(`Created: ${created.join(", ")}`);
   if (kept.length) console.log(`Kept (already there, not touched): ${kept.join(", ")}`);
   console.log(`Next: commit these files, then \`${ctx.cmd} --agent <you>\`. Push mode: ${ctx.cfg.push} (change it in ${CONFIG_FILE}).`);
@@ -750,6 +770,7 @@ export function main(argv = process.argv.slice(2), opts = {}) {
     const root = opts.root || (typeof flags.root === "string" ? path.resolve(flags.root) : findRoot(process.cwd()));
     if (command === "init") return initProject(root, flags);
     const ctx = makeContext(root, loadConfig(root));
+    ensureMergeDriver(ctx);
     if (command === "log") appendLog(ctx, flags);
     else if (command === "focus") updateFocus(ctx, flags);
     else if (["claim", "release", "block", "done"].includes(command)) ticketCommand(ctx, command, positional, flags);

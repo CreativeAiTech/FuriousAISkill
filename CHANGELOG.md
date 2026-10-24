@@ -7,6 +7,21 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.4.0 · 2026-10-24 · task board: parallel branches merge without conflicts
+
+**Changes**
+- tools/batonMerge.mjs: git merge driver for STATE.md / BACKLOG.md. Log: union of new entries, rotation kept, trimmed to
+  the cap. Focus: one block, ours on a both-sides edit. Tickets: per ID, the more advanced box wins, each ticket once (under
+  Done when `[x]`). Anything else falls back to git's normal merge (markers, exit 1).
+- tools/baton.mjs: registers `merge.baton.driver` when unset (every command); `init` adds `<file> merge=baton` lines to
+  `.gitattributes`.
+
+**Why**: 3 parallel sessions merged into master one at a time conflicted in both files on every merge (log insert/rotate
+and the `done` move hit the same spots). Decision note: Crownspire `.agents/decisions/2026-10-24-baton-merge-driver.md`.
+
+**Measure**: Crownspire `node tools/batonMergeProof.mjs` (control conflicts, driver run clean). In use: manual baton merge
+fixes per week (target 0).
+
 ## 1.3.0 · 2026-10-24 · experimental Grok MCP bridge at user scope (opt-in)
 
 **Changes**

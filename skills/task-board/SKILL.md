@@ -8,7 +8,7 @@ description: >
   when switching tasks, and BEFORE ENDING any session or when context/quota runs low (write the baton). Triggers:
   "continue", "where were we", "what's left", "pick up", "take over", "hand off", "claim", "I'm switching tools".
 metadata:
-  version: 0.1.0
+  version: 0.2.0
   status: experimental
 ---
 
@@ -108,6 +108,9 @@ For decisions plus reasoning, `context-compressor` can also write `CONTEXT.md`; 
   rejected, rebased and warned with `CONFLICT`. In `commit-only`/`none` there is no cross-checkout check until you push.
 - Leases are date-granular (`until YYYY-MM-DD`, UTC): a lease expires at the end of that day, not to the hour.
 - Advisory only: nothing stops an agent that never runs the brief.
+- Parallel branches merge through the `baton` git merge driver (`tools/batonMerge.mjs`, registered by any `baton.mjs`
+  run, wired by `.gitattributes` from `init`). Before the first run in a clone, or in a GitHub web merge, git merges these
+  files as plain text and can conflict. A real conflict (prose edited on both sides) still stops with markers.
 
 ## Rules
 
