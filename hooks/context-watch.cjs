@@ -111,12 +111,17 @@ if (event === "SessionStart") {
     try {
       header = fs.readFileSync(ctx, "utf8").split(String.fromCharCode(10)).slice(0, 2).join(" ").trim();
     } catch {}
+    // A live baton (.agents/STATE.md) is updated every session; CONTEXT.md only at checkpoints, so the baton wins on "what next".
+    const hasBaton = fs.existsSync(path.join(cwd, ".agents", "STATE.md"));
     result.hookSpecificOutput = {
       hookEventName: "SessionStart",
-      additionalContext:
-        `A context checkpoint exists at CONTEXT.md (${header}). ` +
-        `If the user's request continues that work (e.g. "continue", "resume"), read it first and start from its Next step. ` +
-        `If the request is unrelated, ignore it.`,
+      additionalContext: hasBaton
+        ? `A context checkpoint exists at CONTEXT.md (${header}). It holds background and reasoning only. ` +
+          `For "continue"/"resume", the next task is .agents/STATE.md Current Focus (the brief), never CONTEXT.md's Next step, which may be stale. ` +
+          `Read CONTEXT.md only when you need the why behind a decision.`
+        : `A context checkpoint exists at CONTEXT.md (${header}). ` +
+          `If the user's request continues that work (e.g. "continue", "resume"), read it first and start from its Next step. ` +
+          `If the request is unrelated, ignore it.`,
     };
   }
   if (input.source === "startup") {
