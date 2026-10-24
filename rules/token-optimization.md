@@ -15,6 +15,7 @@ The main session is the **brain**: it classifies, plans, writes specs, and revie
 
 - Run independent subagents in parallel. Give each only the files it needs.
 - A worker that fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
+- **Hard → highest model, not a cheaper one.** Architecture or design decisions, a bug still unexplained after one real attempt, the same error twice, conflicting constraints, or security/data-loss risk go to the strongest model available: Claude Code → the brain itself (Opus) or a subagent with `model: "opus"`, `effort: "max"`; Antigravity → the strongest model in the picker (Pro class). If the main session runs on a smaller model, stop and tell the user to switch models instead of guessing. Once the hard part yields a clear spec, hand the rest back down to cheaper workers.
 - The user never names a model. Pick the smallest that can do the job well.
 
 | Tool | Small (collect, verify) | Mid (implement) | Brain |

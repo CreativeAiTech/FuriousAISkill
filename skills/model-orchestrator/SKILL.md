@@ -61,6 +61,18 @@ Use the smallest model that can do the job reliably.
 
 If a worker returns something wrong twice, move that task up one tier rather than retrying at the same tier.
 
+**Escalate straight to the top tier** (skip the ladder) when any of these hold:
+- an architecture or design decision, or one that's costly to reverse (data model, save format, engine/combat core, public API)
+- a bug whose cause is still unknown after one real attempt, or the same error twice
+- you're stuck: going in circles, conflicting constraints, or no confident approach
+- security, data-loss, or money risk
+
+How, per tool:
+- **Claude Code**: the brain (Opus) does it inline, or spawns a subagent with `model: "opus"` and `effort: "max"` for a contained hard sub-problem. If the main session isn't on Opus, stop and ask the user to switch (model picker or `/model`) rather than push on with a weaker model.
+- **Antigravity**: switch to the strongest model in the picker (Pro class) for that task, or route it to `@claude`.
+
+Once the hard part is solved and written as a spec, hand implementation back down to Mid/Small workers. Escalation buys judgment, not volume.
+
 **Grok models**: let the bridge auto-select (`model: "auto"`); pass one only if the user names it.
 
 | Model | Use |
