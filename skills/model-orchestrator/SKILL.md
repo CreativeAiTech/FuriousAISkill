@@ -96,6 +96,8 @@ The top tier (Opus / Pro class, at high effort) is the **minimum** for any of th
 5. **Tangled constraints**: concurrency or shared state, or 3+ constraints that pull against each other.
 Caught before code, reversible, or a data-vs-spec ruling → high. Projects can list their own max areas under the "Minimum tier" table.
 
+**Main-session model per session.** The brain doesn't have to be the top model all day: a whole session of Mid-tier work (feature work in one module, UI, pipeline tooling, tests) runs well on a Mid main session, with top-tier calls escalated to a top-model subagent at high. After claiming the task, if the main session is top tier and the task is Mid or Small, say once in one line: `Mid-tier task: switching this session to <mid model> stretches quota ≈1.7x; decisions still escalate to <top model>.` Never switch it yourself and don't repeat it. A Mid main session that hits a minimum-tier trigger escalates, never decides (the table below).
+
 **Decide high, execute low, never guess.** A decision is made by the top tier and *written down*; everything below only relays and executes it.
 
 | You are… | Do this |
