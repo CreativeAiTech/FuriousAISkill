@@ -31,6 +31,7 @@ Agent choice across tools, task specs, handoff: `model-orchestrator`.
 ## 2. Bounded tool use
 - Read targeted line ranges, not whole files. Never read lockfiles, `*.map`, binaries, or build output (`dist/`, `build/`, `out/`, `node_modules/`).
 - Cap noisy output at the source (`| head -n 30`, `| Select-Object -First 30`, `--quiet` / `-q`).
+- Unknown location ("what's in this folder") → `npx --yes repomix@1.18.1 --compress --remove-comments --remove-empty-lines --ignore "**/__tests__/**,**/*.test.*" --include "<folder>/**" --stdout` on the narrowest folder of your own repo (never the whole repo, never `--remote`/`--mcp`, never an untrusted clone), then read only the lines you need. Grep for exact names.
 
 ## 3. Concise replies
 Show diffs, short snippets, or links to changed lines; never echo whole files.

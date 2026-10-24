@@ -14,6 +14,7 @@ used daily on a real game project.
 - **Task board** (`task-board` skill, `tools/baton.mjs`, experimental, opt-in): tickets with claims and leases, a handoff
   "baton" each session writes before it stops, and a brief the next agent reads first. `git push` is the lock.
 - **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
+- **Folder map & pack** (`rules/token-optimization.md` §2): pinned Repomix packs targeted subtrees into compact signatures (~1-2k tokens) so agents don't read entire directories.
 - **Token report** (`tools/tokenReport.mjs`): where your tokens went, and how much delegation actually saved.
 
 One `sync.mjs` copies everything into Claude Code (`~/.claude`) and Antigravity (`~/.gemini`), so every tool follows the same rules.

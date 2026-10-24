@@ -7,6 +7,17 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.6.0 · 2026-10-25 · repo map: pinned Repomix for folder lookups
+
+**Changes**
+- rules/token-optimization.md §2: unknown location / "what's in this folder" bullet pointing to `npx --yes repomix@1.18.1 --compress --remove-comments --remove-empty-lines --ignore "**/__tests__/**,**/*.test.*" --include "<folder>/**" --stdout` on narrowest folder.
+- tools/tokenReport.mjs: counts `repomix calls: N` in `## Delegation`.
+- README.md: noted in What's inside.
+
+**Why**: AGT-25 / decision `2026-10-24-repomix-replaces-repomap.md`: pack small folders into signatures (~1.4k tokens) without maintaining a custom export mapper or indexing server. Pinned version with usage limits (local only, no remote/mcp).
+
+**Measure**: AGT-30 keep/drop trial (5 lookups, Haiku Explore with/without; keep if <=90% tokens and no worse answers).
+
 ## 1.5.0 · 2026-10-25 · routing outcome instrument (GATE lines)
 
 **Changes**
