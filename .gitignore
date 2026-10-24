@@ -1,3 +1,5 @@
 _retired/
 *.log
 local.json
+.env*
+state/

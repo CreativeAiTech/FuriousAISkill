@@ -92,6 +92,14 @@ Opt out with `node ~/.agents/sync.mjs --disable task-board`; `--list` shows what
 - Leases are date-granular (`until YYYY-MM-DD`, UTC), not hourly.
 - Advisory only: it stops agents that follow the protocol from colliding, not ones that skip it.
 
+## Experimental: Grok bridge for every project (`grok-bridge`, opt-in)
+
+A zero-dependency MCP server (`mcp/grok-bridge/`) giving any project the tools `grok_completion`, `grok_review_code` and `grok_get_budget`.
+
+- Enable: `node ~/.agents/sync.mjs --enable grok-bridge` (registers it in `~/.claude.json` `mcpServers`; `--disable` removes it). Restart Claude Code afterwards.
+- API key lookup, first valid wins: env `XAI_API_KEY` / `VITE_XAI_API_KEY`, then the project's `.env.local` / `.env`, then `~/.agents/.env` (kit-ignored). The key is never logged or stored.
+- Ledger: `~/.agents/state/grok-budget.json` (one per machine, kit-ignored). Monthly limit from `AI_USD_BUDGET_MONTHLY` (same lookup), default $20.
+
 ## How this was built
 
 Designed and directed by AlexTheHero (CreativeAiTech), built together with AI agents: mainly Claude Code (Claude Opus),

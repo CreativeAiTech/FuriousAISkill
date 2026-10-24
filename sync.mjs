@@ -10,9 +10,11 @@
  *                              ->  ~/.claude/CLAUDE.md managed block (Claude Code, always-on)
  *   agents/*.md                ->  ~/.claude/agents/<file>           (Claude Code subagents with pinned models)
  *   hooks/claude-hooks.json    -> ~/.claude/settings.json hooks (managed entries only)
+ *   mcp/experimental/<name>.json -> ~/.claude.json top-level mcpServers (user scope; enabled features only,
+ *                                managed entries only = command/args under <kit>/mcp/; atomic write, only when changed)
  *
  * EXPERIMENTAL features are opt-in: a skill whose frontmatter has `metadata.status: experimental`, and its hook
- * manifest hooks/experimental/<name>.json, are synced only when <name> is listed in ~/.agents/local.json (gitignored).
+ * manifest hooks/experimental/<name>.json or mcp/experimental/<name>.json, are synced only when <name> is listed in ~/.agents/local.json (gitignored).
  *   node ~/.agents/sync.mjs --enable task-board     opt in (writes local.json, then syncs)
  *   node ~/.agents/sync.mjs --disable task-board    opt out (removes its generated skill copies and hooks)
  *   node ~/.agents/sync.mjs --list                  show experimental features and whether they are on
@@ -97,6 +99,7 @@ function pruneTree(srcDir, dstDir) {
 // ---------------------------------------------------------------------------
 const LOCAL_FILE = path.join(SRC, "local.json");
 const EXPERIMENTAL_HOOKS = path.join(SRC, "hooks", "experimental");
+const EXPERIMENTAL_MCP = path.join(SRC, "mcp", "experimental");
 
 function readLocal() {
   try {
@@ -116,7 +119,8 @@ function isExperimentalSkill(name) {
 function experimentalFeatures() {
   const skills = dirs(SRC_SKILLS).filter((n) => fs.existsSync(path.join(SRC_SKILLS, n, "SKILL.md")) && isExperimentalSkill(n));
   const hooks = fs.existsSync(EXPERIMENTAL_HOOKS) ? fs.readdirSync(EXPERIMENTAL_HOOKS).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)) : [];
-  return [...new Set([...skills, ...hooks])].sort();
+  const mcp = fs.existsSync(EXPERIMENTAL_MCP) ? fs.readdirSync(EXPERIMENTAL_MCP).filter((f) => f.endsWith(".json")).map((f) => f.slice(0, -5)) : [];
+  return [...new Set([...skills, ...hooks, ...mcp])].sort();
 }
 
 function handleOptInFlags(argv) {
@@ -296,10 +300,76 @@ function syncHooks() {
   writeIfChanged(settingsFile, JSON.stringify(settings, null, 2) + "\n");
 }
 
+/** MCP servers: mcp/experimental/<name>.json (enabled features) -> ~/.claude.json mcpServers (managed entries only) */
+function syncMcp() {
+  const claudeJson = process.env.AGENTS_CLAUDE_JSON || path.join(HOME, ".claude.json"); // env override is for tests
+  const agentsPath = SRC.replace(/\\/g, "/");
+
+  const desired = {};
+  for (const name of ENABLED) {
+    const file = path.join(EXPERIMENTAL_MCP, `${name}.json`);
+    if (!fs.existsSync(file)) continue;
+    try {
+      Object.assign(desired, JSON.parse(read(file).split("{{AGENTS}}").join(agentsPath)));
+    } catch (err) {
+      report.skipped.push(`${rel(file)} (invalid JSON: ${err.message})`);
+    }
+  }
+
+  if (!fs.existsSync(claudeJson)) {
+    if (Object.keys(desired).length) report.skipped.push(`${rel(claudeJson)} (missing, MCP servers not registered)`);
+    return;
+  }
+
+  const isManaged = (entry) =>
+    [entry?.command, ...(Array.isArray(entry?.args) ? entry.args : [])].some(
+      (v) => typeof v === "string" && v.replace(/\\/g, "/").includes(`${agentsPath}/mcp/`)
+    );
+
+  /** Parse the file fresh and apply the desired state. Returns null when nothing changes. */
+  const compute = () => {
+    const raw = fs.readFileSync(claudeJson, "utf-8");
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("not a JSON object");
+    const before = JSON.stringify(data);
+    const servers = data.mcpServers && typeof data.mcpServers === "object" && !Array.isArray(data.mcpServers) ? data.mcpServers : null;
+    if (servers) {
+      for (const [name, entry] of Object.entries(servers)) if (isManaged(entry) && !(name in desired)) delete servers[name];
+    }
+    for (const [name, entry] of Object.entries(desired)) {
+      if (!data.mcpServers || typeof data.mcpServers !== "object" || Array.isArray(data.mcpServers)) data.mcpServers = {};
+      const existing = data.mcpServers[name];
+      if (existing && !isManaged(existing)) {
+        report.skipped.push(`mcpServers.${name} in ${rel(claudeJson)} (user-defined entry, left untouched)`);
+        continue;
+      }
+      data.mcpServers[name] = entry;
+    }
+    if (JSON.stringify(data) === before) return null;
+    return JSON.stringify(data, null, 2) + (raw.endsWith("\n") ? "\n" : "");
+  };
+
+  let out;
+  try {
+    out = compute();
+    if (out === null) return;
+    out = compute(); // re-read right before writing: Claude Code also rewrites this file
+    if (out === null) return;
+  } catch (err) {
+    report.skipped.push(`${rel(claudeJson)} (invalid JSON, left untouched: ${err.message})`);
+    return;
+  }
+  const tmp = `${claudeJson}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, out, "utf-8");
+  fs.renameSync(tmp, claudeJson);
+  report.written.push(`${rel(claudeJson)} (mcpServers)`);
+}
+
 syncSkills();
 syncRules();
 syncAgents();
 syncHooks();
+syncMcp();
 
 const line = (label, list) => list.length && console.log(`${label} (${list.length}):\n  ${list.join("\n  ")}`);
 line("Written", report.written);

@@ -7,6 +7,17 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 `.agents/reports/context-audit-history.csv`) and `tokenReport.mjs` (trend CSV has a `kit_version` column).
 Change one lever per release where possible, so a result can be pinned to its cause.
 
+## 1.3.0 · 2026-10-24 · experimental Grok MCP bridge at user scope (opt-in)
+
+**Changes**
+- mcp/grok-bridge/ (server.mjs, models.mjs, usage.mjs): zero-dependency stdio MCP server (plain `fetch` to api.x.ai) with `grok_completion`, `grok_review_code`, `grok_get_budget`, same schemas and model routing as Crownspire's bridge. Key lookup: env, then project `.env.local`/`.env`, then `~/.agents/.env`; one machine-wide ledger at `~/.agents/state/grok-budget.json`.
+- sync.mjs: `mcp/experimental/<name>.json` manifests are features too; `syncMcp()` merges enabled ones into `~/.claude.json` `mcpServers` (managed entries only, re-read before write, atomic, only when changed) and removes them on `--disable`.
+- .gitignore: `.env*`, `state/`.
+
+**Why**: the bridge lived only in Crownspire's `.mcp.json`, so other projects could not call Grok. Decision note: Crownspire `.agents/decisions/2026-10-24-grok-bridge-user-scope.md`.
+
+**Measure**: off by default. When enabled, `grok_get_budget` shows spend across all projects in one ledger.
+
 ## 1.2.0 · 2026-10-24 · experimental task board (opt-in)
 
 **Changes**

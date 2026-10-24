@@ -1,0 +1,1 @@
+{ "grok-bridge": { "type": "stdio", "command": "node", "args": ["{{AGENTS}}/mcp/grok-bridge/server.mjs"] } }
