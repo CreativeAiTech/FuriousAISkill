@@ -3,6 +3,7 @@
 // Usage: node contextHygiene.mjs [--project <dir>] [--json] [--quiet]
 // Writes <project>/.agents/reports/context-hygiene.md and ~/.claude/hooks/state/context-hygiene/<slug>.json
 // ({date, sizes, baseline}) so the next run can diff week over week. Never prints transcript content.
+// Also counts on-demand reads of <project>/.agents/rules/*.md from transcripts and flags files unread for 30 days.
 // Run on the first session in a project and then weekly by context-watch's SessionStart hook.
 import fs from "node:fs";
 import path from "node:path";
@@ -148,6 +149,50 @@ if (recent.length && older.length && baseline.recent > baseline.older * (1 + TRE
 const outl = baseline.recent ? sess.filter((s) => s.t >= mid && s.n > baseline.recent * (1 + OUTLIER)).sort((a, b) => b.n - a.n).slice(0, 5) : [];
 if (outl.length) add({ check: "f", what: `${outl.length} recent session(s) started above median+10%`, measured: outl.map((s) => `${new Date(s.t).toISOString().slice(0, 10)} ${s.id} ${kfmt(s.n)}`).join("; "), why: "extra always-loaded context in those sessions (plugins, connectors or injected hooks active then)", fix: "compare their setup with a normal session; check app Settings for extra connectors/plugins", save: 0 });
 
+// g. On-demand rule files (.agents/rules/*.md): sessions whose tool calls named the file in the last 30 days.
+// Only Claude Code transcripts are visible; Antigravity reads don't count.
+const rulesDir = path.join(project, ".agents", "rules");
+const ruleFiles = safeDir(rulesDir).filter((f) => f.endsWith(".md")).sort();
+const ruleReads = Object.fromEntries(ruleFiles.map((f) => [f, 0]));
+const RULE_GRACE = 7; // days: a rule file younger than this isn't flagged yet
+const ruleAge = Object.fromEntries(ruleFiles.map((f) => { // days since the file was added (git, else file birth time)
+  const g = spawnSync("git", ["log", "--diff-filter=A", "--format=%ct", "-1", "--", path.join(".agents", "rules", f)], { cwd: project, encoding: "utf8" });
+  const t = Number(String(g.stdout || "").trim()) * 1000 || (() => { try { return fs.statSync(path.join(rulesDir, f)).birthtimeMs; } catch { return Date.now(); } })();
+  return [f, Math.floor((Date.now() - t) / 864e5)];
+}));
+let ruleSessions = 0;
+if (ruleFiles.length) {
+  const cut30 = Date.now() - 30 * 864e5;
+  // A read is a Read/Grep/Glob call, or a shell command that reads the file; writes and paths quoted in baton text don't count.
+  // Kit rules (~/.agents/rules/) are told apart only by file name: a same-named kit file would count too.
+  const READ_TOOLS = new Set(["Read", "Grep", "Glob"]);
+  const SHELL_READ = /\b(?:cat|head|tail|sed|grep|rg|less|wc|Get-Content|type)\b[^|;&\n]*$/i;
+  const RULE_RE = /\.agents[\\/]+rules[\\/]+([\w.-]+\.md)/g;
+  const readsOf = (b) => {
+    const s = JSON.stringify(b.input || {}), out = [];
+    for (const m of s.matchAll(RULE_RE)) if (READ_TOOLS.has(b.name) || ((b.name === "Bash" || b.name === "PowerShell") && SHELL_READ.test(s.slice(0, m.index)))) out.push(m[1]);
+    return out;
+  };
+  for (const d of safeDir(projRoot)) if (d.startsWith(slug)) for (const fn of safeDir(path.join(projRoot, d))) {
+    if (!fn.endsWith(".jsonl")) continue;
+    const fp = path.join(projRoot, d, fn);
+    let st; try { st = fs.statSync(fp); } catch { continue; }
+    if (st.mtimeMs < cut30 || st.size > 64e6) continue;
+    const txt = read(fp); if (!txt) continue;
+    ruleSessions++;
+    const seen = new Set();
+    for (const line of txt.split("\n")) {
+      if (!line.includes('"tool_use"') || !/rules[\\/]/.test(line)) continue;
+      let e; try { e = JSON.parse(line); } catch { continue; }
+      const c = e.message && Array.isArray(e.message.content) ? e.message.content : [];
+      for (const b of c) if (b.type === "tool_use") for (const f of readsOf(b)) if (f in ruleReads) seen.add(f);
+    }
+    for (const f of seen) ruleReads[f]++;
+  }
+  const dead = ruleFiles.filter((f) => !ruleReads[f] && ruleAge[f] >= RULE_GRACE);
+  if (ruleSessions && dead.length) add({ check: "g", what: `${dead.length} on-demand rule file(s) never read in 30 days`, measured: dead.map((f) => `.agents/rules/${f}`).join(", ") + ` (0 of ${ruleSessions} Claude Code sessions)`, why: "either agents skip the AGENTS.md trigger pointer or the rule is dead", fix: "check the trigger line wording in AGENTS.md; if the trigger never happens, fold the rule into another file or drop it", save: 0 });
+}
+
 // Report
 findings.forEach((f) => { f.save = Math.max(0, Math.round(f.save)); });
 const real = findings.filter((f) => !f.info);
@@ -162,6 +207,10 @@ if (!findings.length) L.push("None. Nothing bloats the starting context right no
 for (const f of findings) L.push(`- **[${f.check}] ${f.what}**: ${f.measured}. Cost: ${f.why}. Fix: ${f.fix}.`);
 L.push("", "## Top 3 savings (est. tokens per session or per read)", "");
 if (!top.length) L.push("None."); else top.forEach((f, i) => L.push(`${i + 1}. ~${kfmt(f.save)} est. tokens: ${f.what}`));
+if (ruleFiles.length) {
+  L.push("", `## On-demand rule reads (last 30 days, ${ruleSessions} Claude Code sessions; Antigravity not visible)`, "", "| Rule file | Sessions that read it |", "| :--- | ---: |");
+  for (const f of ruleFiles) L.push(`| .agents/rules/${f} | ${ruleReads[f]}${ruleReads[f] ? "" : ruleAge[f] < RULE_GRACE ? ` (new, ${ruleAge[f]}d old)` : " ⚠"} |`);
+}
 L.push("", "## Check in the app (can't be seen locally)", "",
   "claude.ai account skills and plugins such as `anthropic-skills:*`, `engineering:*`, `design:*`, and connectors/MCP servers add to the starting context. Review them in the app: Settings -> Capabilities / Skills / Connectors, and switch off what this project doesn't use. Turning anything off needs your yes.", "");
 const outText = L.join("\n");
