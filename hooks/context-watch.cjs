@@ -11,8 +11,12 @@
 // SessionStart (startup): refreshes the daily token report (tools/tokenReport.mjs)
 //   and shows its one-line summary to the user.
 //
-// Thresholds (tokens of growth) can be overridden with env vars
-// CC_WATCH_SOFT and CC_WATCH_HARD (defaults 30k/60k since v1.1.0).
+// SessionStart (startup): refreshes the project's context profile (tools/contextProfile.mjs) once a day, detached.
+//
+// Thresholds come from that profile (the project's measured baseline, heavy-turn size and window): soft/hard growth,
+// plus a forced hard nudge once the total nears the window whatever the growth, and a one-time note when a session
+// starts well above the project's usual baseline. No profile yet: 30k/60k growth (v1.1.0 defaults).
+// Env vars CC_WATCH_SOFT and CC_WATCH_HARD override the growth thresholds.
 
 const fs = require("fs");
 const path = require("path");
@@ -20,8 +24,8 @@ const os = require("os");
 
 const VERSION = (() => { try { return fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim(); } catch { return "dev"; } })();
 // v1.1.0: 40k/80k/40k -> 30k/60k/30k. One heavy turn adds 30-45k, so the old soft note landed a turn late (CHANGELOG.md).
-const SOFT = Number(process.env.CC_WATCH_SOFT) || 30000;
-const HARD = Number(process.env.CC_WATCH_HARD) || 60000;
+const DEFAULT_SOFT = 30000;
+const DEFAULT_HARD = 60000;
 const REPEAT = 30000; // after hard, remind again every this many extra tokens
 const STATE_DIR = path.join(os.homedir(), ".claude", "hooks", "state");
 
@@ -94,6 +98,28 @@ function gitSaved(cwd) {
 
 const k = (n) => Math.round(n / 1000) + "k";
 
+// Worktrees share the main checkout's profile (same slug rule as tools/contextProfile.mjs).
+function mainRoot(cwd) {
+  const r = require("child_process").spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, timeout: 3000, encoding: "utf8", windowsHide: true });
+  const common = r.status === 0 ? String(r.stdout || "").trim() : "";
+  return common && path.basename(common) === ".git" ? path.dirname(common) : path.resolve(cwd);
+}
+const profileFile = (root) => path.join(os.homedir(), ".claude", "hooks", "state", "context-profile", root.replace(/[^A-Za-z0-9]/g, "-") + ".json");
+function loadProfile(root) {
+  try { return JSON.parse(fs.readFileSync(profileFile(root), "utf8")); } catch { return null; }
+}
+
+// Daily profile refresh (startup only): detached so it never delays the session; this session uses the previous profile.
+function refreshProfile(cwd) {
+  try {
+    const root = mainRoot(cwd);
+    const p = loadProfile(root);
+    if (p && p.date === new Date().toISOString().slice(0, 10)) return;
+    const tool = path.join(__dirname, "..", "tools", "contextProfile.mjs");
+    require("child_process").spawn(process.execPath, [tool, "--project", root, "--quiet"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  } catch {}
+}
+
 const input = readStdin();
 const event = input.hook_event_name;
 
@@ -141,6 +167,7 @@ if (event === "SessionStart") {
     };
   }
   if (input.source === "startup") {
+    refreshProfile(cwd);
     const line = dailyReport(cwd);
     if (line) result.systemMessage = line;
   }
@@ -156,24 +183,39 @@ const baseline = Math.min(...sizes);
 const growth = current - baseline;
 
 const state = loadState(input.session_id);
+const cwdNow = input.cwd || process.cwd();
+const profile = loadProfile(mainRoot(cwdNow));
+const t = (profile && profile.thresholds) || {};
+const SOFT = Number(process.env.CC_WATCH_SOFT) || t.soft || DEFAULT_SOFT;
+const HARD = Number(process.env.CC_WATCH_HARD) || t.hard || DEFAULT_HARD;
+const CAP = t.cap || 0; // total context that forces the hard nudge, whatever the growth
+const forced = CAP > 0 && current >= CAP;
 
-// Context shrank (e.g. after /compact): reset so warnings can fire again later.
-if (growth < SOFT) {
-  if (state.level !== 0) saveState(input.session_id, { level: 0, lastHardAt: 0 });
-  out({});
+// Baseline creep: this session started well above the project's usual start (new plugin, MCP server, big rules file).
+let creepNote = "";
+if (profile && profile.baseline && !state.creep && baseline > profile.baseline * 1.15 && baseline - profile.baseline > 10000) {
+  state.creep = true;
+  saveState(input.session_id, state);
+  creepNote = `context-watch: this chat started at ~${k(baseline)}, above this project's usual ~${k(profile.baseline)}. See .agents/reports/context-profile.md for what the start is made of.`;
 }
 
-const stats = `context ~${k(current)} tokens, +${k(growth)} grown in this chat`;
-const saved = gitSaved(input.cwd || process.cwd());
+// Context shrank (e.g. after /compact): reset so warnings can fire again later.
+if (growth < SOFT && !forced) {
+  if (state.level !== 0) saveState(input.session_id, { ...state, level: 0, lastHardAt: 0 });
+  out(creepNote ? { systemMessage: creepNote } : {});
+}
+
+const stats = `context ~${k(current)} tokens, +${k(growth)} grown in this chat` + (forced ? `, near this project's safe limit (${k(CAP)})` : "");
+const saved = gitSaved(cwdNow);
 const freshLine = `"This task is finished and saved in git. This chat is now ~${k(current)} tokens, so continuing here costs more on every turn; please open a fresh chat for the next task."`;
 const savedNote =
   `Git shows everything committed and pushed. Do NOT write CONTEXT.md, a baton entry or a checkpoint that would only repeat git history. ` +
   `Only if this chat produced something not yet in a commit, decision note, backlog item or the baton (a decision, a finding, an open question), save just that piece. `;
 
-if (growth >= HARD && (state.level < 2 || growth - state.lastHardAt >= REPEAT)) {
-  saveState(input.session_id, { level: 2, lastHardAt: growth });
+if ((growth >= HARD || forced) && (state.level < 2 || growth - state.lastHardAt >= REPEAT)) {
+  saveState(input.session_id, { ...state, level: 2, lastHardAt: growth });
   out({
-    systemMessage: `context-watch: ${stats}. ${saved ? "Work is in git: open a fresh chat." : "Checkpoint recommended."}`,
+    systemMessage: `context-watch: ${stats}. ${saved ? "Work is in git: open a fresh chat." : "Checkpoint recommended."}` + (creepNote ? " " + creepNote : ""),
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
@@ -190,8 +232,9 @@ if (growth >= HARD && (state.level < 2 || growth - state.lastHardAt >= REPEAT)) 
 }
 
 if (growth >= SOFT && state.level < 1) {
-  saveState(input.session_id, { level: 1, lastHardAt: 0 });
+  saveState(input.session_id, { ...state, level: 1, lastHardAt: 0 });
   out({
+    ...(creepNote ? { systemMessage: creepNote } : {}),
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
       additionalContext:
@@ -205,4 +248,4 @@ if (growth >= SOFT && state.level < 1) {
   });
 }
 
-out({});
+out(creepNote ? { systemMessage: creepNote } : {});

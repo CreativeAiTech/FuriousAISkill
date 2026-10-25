@@ -15,13 +15,14 @@ Two independent reasons to checkpoint. Either one is enough:
 - **Cost:** every message re-reads the whole history, so a long chat burns usage limits on every turn.
 - **Drift (any length):** models that take a wrong turn in a conversation rarely recover in it, and a fresh chat started from a consolidated summary does markedly better (see Evidence below). Signals: the user re-explains something settled, corrects the same misunderstanding twice, or you catch yourself contradicting an earlier decision. On a drift signal, offer a checkpoint even in a short chat.
 
-**In Claude Code with the context-watch hook installed**, you'll receive `[context-watch vX]` notes with real token counts. Follow them:
+**In Claude Code with the context-watch hook installed**, you'll receive `[context-watch vX]` notes with real token counts. The hook sizes its nudges from the project's context profile (`tools/contextProfile.mjs`: measured starting context, heavy-turn size, window), and also fires the hard note when the total nears the window. Follow them:
 - **Soft note:** answer normally. If this reply wraps up a task or milestone, or the topic is changing, end it with one line offering a checkpoint. If not, make that offer at the first later reply that does. Don't drop it.
 - **Hard note:** answer normally, then at the end of the same reply write/update `CONTEXT.md` and give the resume instructions below. Don't ask permission first; the user opted in to automatic checkpoints.
 - **Nothing left to save** (the hook says git is clean and pushed, or you checked): don't write `CONTEXT.md` or a baton that would only repeat git history. Save only a decision, finding or open question that isn't yet in a commit, decision note or backlog item. If there's none, end with one line: the task is finished and saved in git, the chat is at ~N tokens so continuing here costs more per turn, please open a fresh chat.
 
 **Without the hook (claude.ai chat, other tools)**, you can't see token counts, so count turns and pastes instead. Count it as **soft** when any of these is true:
 - ~20-25 back-and-forth turns, or a few large pastes, logs, files or tool outputs.
+- 3 heavy turns (each read 300+ lines or got a big tool output), whatever the turn count.
 - A task or milestone just finished (feature works, bug fixed, decision made) and the chat is already long.
 - The topic is changing and the old history won't help.
 - The user mentions cost, limits, quota or slowness.
@@ -68,7 +69,7 @@ When unsure whether something is KEEP or SUMMARIZE, keep it. A few extra lines c
 
 Write `CONTEXT.md` using `template.md` in this skill's folder. Rules:
 
-1. Target **under ~800 words** for most projects; hard ceiling ~1,500. If it's longer, the SUMMARIZE bucket is too detailed.
+1. Target **under ~800 words** for most projects; hard ceiling ~1,500 (the context profile flags a bigger file). If it's longer, the SUMMARIZE bucket is too detailed: move settled reasoning into decision notes and keep a one-line pointer.
 2. Put the **Next step** first after the goal: the new chat should be able to act immediately.
 3. Use exact quotes (in code blocks) for everything in KEEP VERBATIM.
 4. Date the checkpoint and number it (Checkpoint 1, 2, ...).

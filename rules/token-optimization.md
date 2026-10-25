@@ -37,6 +37,9 @@ Show diffs, short snippets, or links to changed lines; never echo whole files.
 
 ## 4. Checkpoint long chats
 About 20+ turns with heavy tool output, or right after a milestone: checkpoint with `context-compressor` and start fresh (prefer it over `/compact` for long work).
+- **Size the task first.** The context profile (`node ~/.agents/tools/contextProfile.mjs`, refreshed daily; `.agents/reports/context-profile.md`) gives this project's starting context, heavy-turn size and growth budget (Claude Code's context-watch nudges from it). A task whose reading won't fit the budget: split it, or send the reading to subagents (their reads stay out of the main chat).
+- **No hook (Antigravity)**: also checkpoint after 3 heavy turns (a turn that read 300+ lines or got a big tool output), whatever the turn count.
+- Keep `CONTEXT.md` inside the `context-compressor` ceiling (~1,500 words, ~2.5k tokens; the profile flags it): move settled reasoning into decision notes and drop it from the checkpoint.
 
 ## 5. Measure, don't guess
 `node ~/.agents/tools/tokenReport.mjs --summary` (Claude Code; refreshes daily at session start) writes `.agents/reports/token-report.md`: kit overhead vs delegation savings, wasteful spawns, oversized tool results, late checkpoints. Check it before changing these rules.
