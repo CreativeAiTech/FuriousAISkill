@@ -51,6 +51,7 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 | `tools/contextProfile.mjs` | Context profile: the project's measured starting context, heavy-turn size and window headroom; sets context-watch's nudges, re-runs daily at session start, report at `.agents/reports/context-profile.md` |
+| `tools/modelTier.mjs` + `hooks/model-check.mjs` | Model fallback gate (opt-in: `"modelGate": true` in `.agents/baton.config.json`): a non-top main model is stopped once and must ask the user (`baton.mjs --model <id>` for tools without hooks); ranks in `model-ranks.json`, an unranked model asks "top, mid or small?" and `modelTier.mjs learn` records the answer |
 | `tools/tokenReport.mjs` | Token report: kit overhead vs measured delegation savings, context hygiene, verdict (see below) |
 | `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |
 

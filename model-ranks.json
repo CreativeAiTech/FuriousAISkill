@@ -1,0 +1,27 @@
+{
+  "_doc": "Kit model ranks read by tools/modelTier.mjs when a project has no .agents/model-ranks.json. Case-insensitive regexes, matched against the model id in rank order small -> mid -> top (so flash-lite is small, not mid; \b because 'gemini' contains 'mini'). No match = 'unranked': gated like any fallback; the warning asks the user to rank it and `modelTier.mjs learn` appends the answer here. New flagship names rarely follow a pattern: add each one explicitly.",
+  "ranks": {
+    "small": [
+      "haiku",
+      "\\blite\\b",
+      "\\bmini\\b",
+      "\\bnano\\b"
+    ],
+    "mid": [
+      "sonnet",
+      "flash"
+    ],
+    "top": [
+      "opus",
+      "fable",
+      "argon",
+      "gemini[\\w.\\s-]*\\bpro\\b"
+    ]
+  },
+  "allowed": {
+    "top": "Everything; the project's top-tier areas still at high effort.",
+    "mid": "feature work inside one module, UI, tooling, written specs. No top-tier decisions.",
+    "small": "content, docs, verify runs, tickets with a ready spec only.",
+    "unranked": "treated as small until ranked (modelTier.mjs learn)."
+  }
+}

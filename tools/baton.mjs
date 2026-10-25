@@ -8,7 +8,9 @@
  *   <project>/.agents/baton.config.json   optional settings (written by `init`; see DEFAULTS below)
  *
  *   node ~/.agents/tools/baton.mjs init [--project <name>] [--push push-master|commit-only|none]   Write templates (never overwrites)
- *   node ~/.agents/tools/baton.mjs [--agent <name>] [--hook]      Print the session brief (--hook: never fails)
+ *   node ~/.agents/tools/baton.mjs [--agent <name>] [--model <id>] [--hook]   Print the session brief (--hook: never fails)
+ *       --model: the main session's exact model id. With "modelGate": true in baton.config.json a non-top model gets a
+ *       stop-and-ask warning as the brief's first line and sees only tickets with .agents/tasks/<ID>/spec.md (tools/modelTier.mjs).
  *   node ~/.agents/tools/baton.mjs log --agent <name> --done "<what>" [--next "<what>"]   Append a baton line, renew your leases
  *   node ~/.agents/tools/baton.mjs focus --task "<t>" --owner <agent> --status <s> [--next] [--files] [--verify] [--force]
  *   node ~/.agents/tools/baton.mjs focus --clear
@@ -26,6 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { modelTier, recordModel, readQuota, fallbackWarning } from "./modelTier.mjs";
 
 export const DEFAULTS = {
   project: "",
@@ -41,6 +44,7 @@ export const DEFAULTS = {
   humanTags: ["user"], // tickets any agent may claim on the human's behalf
   maxLogEntries: 15,
   command: "node ~/.agents/tools/baton.mjs", // how the brief tells agents to call this tool
+  modelGate: false, // true: a non-top main model stops and asks first (tools/modelTier.mjs, hooks/model-check.mjs)
 };
 const AUTO_BATON = ".agents/auto-baton.json"; // written by the kit's auto-baton hook
 const CONFIG_FILE = ".agents/baton.config.json";
@@ -239,9 +243,19 @@ function autoBatonEntries(ctx) {
 // ---------------------------------------------------------------------------
 // Brief
 // ---------------------------------------------------------------------------
-function buildBrief(ctx, agent = "", sections = {}) {
+function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false) {
   const out = [];
   const me = agentTag(ctx, agent);
+  // Model gate (opt-in): the warning goes first so a model that skims still sees it. Claude Code's hook input has no
+  // model; there hooks/model-check.mjs reads it from the transcript at the first tool call instead.
+  const gate = Boolean(ctx.cfg.modelGate);
+  if (typeof model !== "string") model = "";
+  const fallback = gate && modelTier(model, ctx.root) === "fallback";
+  if (gate && model) recordModel(ctx.root, me || "unknown-tool", model, "--model flag");
+  if (fallback) out.push(fallbackWarning(model, ctx.root), "");
+  else if (gate && !model && !fromHook) {
+    out.push("⚠️ Model not reported. Rerun with `--model <your exact model id>`. Not the top model → stop and ask the user before any work.", "");
+  }
   const stateText = readText(ctx.stateFile);
   const backlogText = readText(ctx.backlogFile);
   const hook = (name) => {
@@ -250,6 +264,10 @@ function buildBrief(ctx, agent = "", sections = {}) {
   };
 
   out.push(`# ${ctx.cfg.project || path.basename(ctx.root)} Session Brief (${today()})`, "");
+  const seenFallback = gate ? readQuota(ctx.root).filter((r) => r.tier === "fallback") : [];
+  if (seenFallback.length) {
+    out.push(`- Quota: last session ran a fallback model on ${seenFallback.map((r) => `${r.tool} (${r.model}, ${r.seen})`).join(", ")} (.agents/QUOTA.md)`, "");
+  }
 
   const branch = git(ctx, ["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
   const dirty = git(ctx, ["status", "--porcelain"]).split("\n").filter(Boolean);
@@ -329,7 +347,10 @@ function buildBrief(ctx, agent = "", sections = {}) {
       for (const t of ready.slice(0, 8)) out.push(clip(t));
       out.push(`- _Tip: pass \`--agent <${Object.keys(ctx.cfg.agents).join("|")}>\` to see only your tickets and what blocks them._`);
     } else {
-      const mine = ready.filter((t) => t.tag === me);
+      // Fallback model: only tickets with a ready dossier spec (decided work, no rulings left).
+      const hasSpec = (t) => fs.existsSync(path.join(ctx.root, ".agents", "tasks", t.id, "spec.md"));
+      const mine = ready.filter((t) => t.tag === me && (!fallback || hasSpec(t)));
+      if (fallback) out.push("- _Fallback mode: listing only tickets with a ready `.agents/tasks/<ID>/spec.md`._");
       const urgentOthers = ready.filter((t) => t.urgent && t.tag !== me);
       out.push(`### Ready for you (@${me}), in pick order`);
       if (mine.length) for (const t of mine.slice(0, 6)) out.push(clip(t));
@@ -774,7 +795,7 @@ export function main(argv = process.argv.slice(2), opts = {}) {
     if (command === "log") appendLog(ctx, flags);
     else if (command === "focus") updateFocus(ctx, flags);
     else if (["claim", "release", "block", "done"].includes(command)) ticketCommand(ctx, command, positional, flags);
-    else if (!command) console.log(buildBrief(ctx, flags.agent, opts.sections || {}));
+    else if (!command) console.log(buildBrief(ctx, flags.agent, opts.sections || {}, flags.model, Boolean(flags.hook)));
     else {
       console.error(`Unknown command "${command}". Commands: init, log, focus, claim, release, block, done (none = brief).`);
       process.exit(1);
