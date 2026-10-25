@@ -8,6 +8,15 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 Change one lever per release where possible, so a result can be pinned to its cause.
 Releases are numbered at ship time by `node tools/release.mjs` from `.changes/<TICKET>.md` fragments; feature commits never edit `VERSION` or `CHANGELOG.md` directly.
 
+## Unreleased · Token hygiene audit
+
+**Changes**
+- New `tools/contextHygiene.mjs`: weekly audit of the always-loaded starting context (rule files over 3k est. tokens or grown >20%, duplicate skills and hooks, CONTEXT.md header length, oversized BACKLOG/STATE, first-turn baseline trend); writes `.agents/reports/context-hygiene.md` with a Top 3 savings list, state in `~/.claude/hooks/state/context-hygiene/`.
+- `hooks/context-watch.cjs`: runs it on startup when never run or 7+ days old and appends its summary line; caps the injected CONTEXT.md header at 200 chars.
+- `rules/token-optimization.md`: "Weekly hygiene check" section.
+
+**Why**: a project's CONTEXT.md header was ~1,500 chars injected every session, and duplicate skills/hooks went unnoticed. Measure after: first-turn baseline median in the next report.
+
 ## 1.8.0 · 2026-10-25 · Model fallback gate - rank table, learn on first sight + Context profile - per-project nudges from measured baseline + Session title C- prefix only for real resumes
 
 **Changes**

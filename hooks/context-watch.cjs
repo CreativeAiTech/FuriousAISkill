@@ -144,6 +144,23 @@ function dailyReport(cwd) {
   }
 }
 
+// Weekly token-hygiene audit (startup only): first run in a project, then every 7 days. Synchronous (short), silent on failure.
+function weeklyHygiene(cwd) {
+  try {
+    const root = mainRoot(cwd);
+    const st = path.join(os.homedir(), ".claude", "hooks", "state", "context-hygiene", root.replace(/[^A-Za-z0-9]/g, "-") + ".json");
+    let due = true;
+    try { const d = JSON.parse(fs.readFileSync(st, "utf8")).date; due = !(Date.now() - Date.parse(d) < 7 * 864e5); } catch {}
+    if (!due) return null;
+    const tool = path.join(__dirname, "..", "tools", "contextHygiene.mjs");
+    const r = require("child_process").spawnSync(process.execPath, [tool, "--project", root, "--quiet"], { timeout: 6000, encoding: "utf8", windowsHide: true });
+    const line = r.status === 0 ? String(r.stdout || "").trim().split(String.fromCharCode(10)).pop() : "";
+    return line || null;
+  } catch {
+    return null;
+  }
+}
+
 if (event === "SessionStart") {
   const cwd = input.cwd || process.cwd();
   const result = {};
@@ -152,6 +169,7 @@ if (event === "SessionStart") {
     let header = "";
     try {
       header = fs.readFileSync(ctx, "utf8").split(String.fromCharCode(10)).slice(0, 2).join(" ").trim();
+      if (header.length > 200) header = header.slice(0, 199) + "…";
     } catch {}
     // A live baton (.agents/STATE.md) is updated every session; CONTEXT.md only at checkpoints, so the baton wins on "what next".
     const hasBaton = fs.existsSync(path.join(cwd, ".agents", "STATE.md"));
@@ -169,7 +187,9 @@ if (event === "SessionStart") {
   if (input.source === "startup") {
     refreshProfile(cwd);
     const line = dailyReport(cwd);
-    if (line) result.systemMessage = line;
+    const hyg = weeklyHygiene(cwd);
+    const msg = [line, hyg].filter(Boolean).join(" · ");
+    if (msg) result.systemMessage = msg;
   }
   out(result);
 }

@@ -44,6 +44,11 @@ About 20+ turns with heavy tool output, or right after a milestone: checkpoint w
 ## 5. Measure, don't guess
 `node ~/.agents/tools/tokenReport.mjs --summary` (Claude Code; refreshes daily at session start) writes `.agents/reports/token-report.md`: kit overhead vs delegation savings, wasteful spawns, oversized tool results, late checkpoints. Check it before changing these rules.
 
+## Weekly hygiene check
+`tools/contextHygiene.mjs` audits what bloats the always-loaded starting context: big or fast-growing rule files, duplicate skills and hooks, a long CONTEXT.md header, oversized BACKLOG/STATE, and the first-turn baseline trend.
+context-watch runs it at the first startup session in a project, then every 7 days, and shows one summary line. Report: `<project>/.agents/reports/context-hygiene.md` (est. tokens, Top 3 savings).
+Fixes that turn something off (plugins, connectors, skills, hooks) need the user's yes; never apply them silently.
+
 ## 6. Name the session after the task
 Once you know the task (a "continue" resume, or a request that turns into one task), rename the session
 `<HHMM>-<ID> <short task>` (local 24h time, ticket ID if any), e.g. `1930-PET-07 fox mask redo`.
