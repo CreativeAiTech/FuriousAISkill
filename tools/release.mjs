@@ -11,7 +11,7 @@
  *   2. git pull --ff-only (so the version is taken from latest origin).
  *   3. Bump = highest bump across fragments; read VERSION, compute next semver; refuse if tag v<next> exists.
  *   4. Write VERSION; insert ## <next> · <YYYY-MM-DD> · <titles joined by " + "> right above newest release heading; delete fragments.
- *   5. One commit "release: v<next> <title>", annotated tag "v<next>", git push then git push origin v<next>.
+ *   5. One commit "release: v<next> <title>", annotated tag "v<next>", one atomic push of branch + tag.
  *   6. Push rejected -> git tag -d v<next>, git reset --soft HEAD~1, restore fragments, print "origin moved, rerun".
  */
 
@@ -110,7 +110,7 @@ function parseFragment(filePath, fileName) {
   let bump = null;
   let title = null;
   for (const line of frontmatter.split(/\r?\n/)) {
-    const clean = line.replace(/#.*$/, "").trim();
+    const clean = line.replace(/(^|\s)#.*$/, "").trim();
     const match = clean.match(/^(\w+):\s*(.*)$/);
     if (match) {
       const key = match[1].toLowerCase();
@@ -168,7 +168,8 @@ if (!dryRun) {
   try {
     execGit(["pull", "--ff-only"]);
   } catch (err) {
-    abort(`git pull --ff-only failed: ${err.message.split("\n")[0]}`);
+    const lines = err.message.split("\n").filter((l) => l.trim());
+    abort(`git pull --ff-only failed: ${lines.find((l) => l.startsWith("fatal:")) || lines.pop()}`);
   }
 }
 
@@ -218,25 +219,34 @@ for (const frag of fragments) {
   fs.unlinkSync(path.join(changesDir, frag.file));
 }
 
-// Step 5: Commit, tag, push with Step 6 rollback
+// Step 5: Commit, tag, atomic push (branch + tag land together or not at all), Step 6 rollback
+function rollback(committed) {
+  if (committed) {
+    try { execGit(["tag", "-d", `v${nextVersion}`]); } catch {}
+    try { execGit(["reset", "--soft", "HEAD~1"]); } catch {}
+  }
+  try { execGit(["checkout", "HEAD", "--", ".changes", "VERSION", "CHANGELOG.md"]); } catch {}
+  try { execGit(["reset"]); } catch {}
+}
+
+let committed = false;
 try {
   execGit(["add", "VERSION", "CHANGELOG.md", ".changes"]);
   execGit(["commit", "-m", `release: v${nextVersion} ${combinedTitles}`]);
+  committed = true;
   execGit(["tag", "-a", `v${nextVersion}`, "-m", `v${nextVersion}`]);
 } catch (err) {
-  abort(`commit/tag failed: ${err.message.split("\n")[0]}`);
+  rollback(committed);
+  abort(`commit/tag failed, release undone: ${err.message.split("\n")[0]}`);
 }
 
 try {
-  execGit(["push"]);
-  execGit(["push", "origin", `v${nextVersion}`]);
+  execGit(["push", "--atomic", "origin", "HEAD", `refs/tags/v${nextVersion}`]);
 } catch (err) {
-  try { execGit(["tag", "-d", `v${nextVersion}`]); } catch {}
-  try { execGit(["reset", "--soft", "HEAD~1"]); } catch {}
-  try { execGit(["checkout", "HEAD", "--", ".changes"]); } catch {}
-  try { execGit(["checkout", "HEAD", "--", "VERSION", "CHANGELOG.md"]); } catch {}
-  try { execGit(["reset"]); } catch {}
-  abort("origin moved, rerun");
+  rollback(true);
+  const reason = err.message.split("\n").find((l) => l.trim()) || "push failed";
+  const raced = /rejected|non-fast-forward|fetch first/i.test(err.message);
+  abort(raced ? "origin moved, rerun" : `push failed, release undone: ${reason}`);
 }
 
 console.log(`v${nextVersion}`);
