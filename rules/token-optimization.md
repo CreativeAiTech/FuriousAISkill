@@ -2,6 +2,8 @@
 
 Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, except that the default top-tier areas (`model-orchestrator` Step 4) are a floor: projects may add areas, and lowering one needs a written reason in the project's rules. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
 
+**Before you write or edit an agent rule** (CLAUDE.md, AGENTS.md, GEMINI.md, kit rules): read `~/.agents/rules/topics/writing-rules.md`.
+
 ## 1. Orchestrator-first (decide before acting)
 The main session is the **brain**: it classifies, plans, writes specs and reviews; cheaper subagents do the legwork. Before the first tool call on a request, state the route in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
 
