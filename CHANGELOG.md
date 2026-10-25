@@ -8,6 +8,34 @@ Measure with `node ~/.agents/tools/contextAudit.mjs --project <dir> --days 7` (p
 Change one lever per release where possible, so a result can be pinned to its cause.
 Releases are numbered at ship time by `node tools/release.mjs` from `.changes/<TICKET>.md` fragments; feature commits never edit `VERSION` or `CHANGELOG.md` directly.
 
+## 1.8.0 · 2026-10-25 · Model fallback gate - rank table, learn on first sight + Context profile - per-project nudges from measured baseline + Session title C- prefix only for real resumes
+
+**Changes**
+- New `tools/modelTier.mjs`: ranks model ids (top / mid / small / unranked) from `<project>/.agents/model-ranks.json`, else the kit's `model-ranks.json`, else a built-in copy; keeps `.agents/QUOTA.md` (last model per tool). CLI `rank <model>` and `learn <model> --rank top|mid|small`: writes the user's answer for a new model into the table in use, commits it and pushes (project: per `push` mode; kit: its remote).
+- New PreToolUse hook `hooks/model-check.mjs` (Bash/PowerShell/Edit/Write/NotebookEdit/Agent): once per session reads the real main-session model from the transcript; non-top → denies that one call with the stop-and-ask question (plus "top, mid or small?" for an unranked model). Subagents skipped, fails open.
+- `baton.mjs --model <id>`: warning as the brief's first line, only tickets with `.agents/tasks/<ID>/spec.md` listed, "model not reported" notice without `--model` (not in `--hook` mode), quota line when a tool last ran a fallback.
+- Opt-in per project: `"modelGate": true` in `.agents/baton.config.json`; off by default (the hook writes its marker and exits).
+
+**Why**: Crownspire decision `.agents/decisions/2026-10-25-model-fallback-gate.md` (AGT-36 + rank-table amendment), ported as AGT-37. A weak model can skim rules, so the stop has to come from tooling. Learn on first sight instead of polling provider model lists: those give names, not strength, and need keys.
+
+**Measure**: `node tools/modelTier.mjs rank <id>` per known id; scratch repo with `modelGate: true`: `baton.mjs --agent gemini --model gemini-3-flash` puts the warning first and lists only spec'd tickets; the hook denies the first call for a sonnet transcript and passes the second, subagent calls, gate-off projects and opus.
+
+**Changes**
+- New `tools/contextProfile.mjs`: measures the project's starting context (median baseline), heavy-turn growth (p90 per prompt), window and auto-compacts from its Claude Code transcripts (main checkout + worktrees, last 14 days); writes `~/.claude/hooks/state/context-profile/<slug>.json` and `.agents/reports/context-profile.md` (what the baseline is made of, project size, CONTEXT.md over the skill ceiling, 90-day baseline history).
+- `context-watch.cjs`: soft/hard growth from the profile (hard = min(60k, 80% window − baseline − heavy turn); soft = min(30k, hard − heavy turn)); forced hard once the total reaches 80% window − heavy turn, whatever the growth; one-time note when a session starts 15%+ and 10k+ above the usual baseline; refreshes the profile once a day at startup (detached, ~0.2 s). No profile → 30k/60k as before; env overrides unchanged.
+- Rules §4 + `context-compressor`: size the task against the growth budget first; no-hook tools checkpoint after 3 heavy turns; the profile flags CONTEXT.md over the ~1,500-word ceiling.
+
+**Why**: growth-only thresholds can't see a rising baseline: at a 130k start the hard nudge would sit past auto-compact. Measured on Crownspire 2026-10-25: baseline ~77k (75-79k), of which ~69k is system prompt, tool schemas and skill list; heavy turn p90 ~22k.
+
+**Measure**: `node tools/contextProfile.mjs` summary line; `node tools/contextAudit.mjs` (late nudges, compacts) after a week.
+
+**Changes**
+- Rule §6: `C-` marks a session that picks up unfinished work from an earlier one, including the same task moved to a fresh chat after a context checkpoint. "Continue" that starts a fresh ticket (next backlog pick, another agent's `needs-review`, idle focus) gets a plain title.
+
+**Why**: user 2026-10-25: every "continue" got `C-`, so the prefix no longer told resumed work apart from new tasks.
+
+**Measure**: new session titles carry `C-` only when the brief showed your own `in-progress`/`blocked` focus.
+
 ## 1.7.0 · 2026-10-25 · Kit tools/release.mjs + .changes/ fragments
 
 **Changes**
