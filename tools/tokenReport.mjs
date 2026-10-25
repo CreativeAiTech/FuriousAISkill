@@ -16,6 +16,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { pbVarint, pbFields } from "./lib/agStore.mjs";
 
 // API list $/MTok; edit when prices change
 const PRICES = {
@@ -474,21 +475,6 @@ const ag = {
   spawns: [],
   delegationSavings: 0,
 };
-function pbVarint(b, i) { let r = 0, m = 1; for (;;) { if (i >= b.length) throw new Error("pb: eof"); const x = b[i++]; r += (x & 0x7f) * m; m *= 128; if (!(x & 0x80)) return [r, i]; } }
-function pbFields(b) {
-  const o = {}; let i = 0;
-  while (i < b.length) {
-    let t; [t, i] = pbVarint(b, i);
-    const f = Math.floor(t / 8), w = t % 8; let v;
-    if (w === 0) [v, i] = pbVarint(b, i);
-    else if (w === 2) { let l; [l, i] = pbVarint(b, i); if (i + l > b.length) throw new Error("pb: len"); v = b.subarray(i, i + l); i += l; }
-    else if (w === 1) { i += 8; continue; }
-    else if (w === 5) { i += 4; continue; }
-    else throw new Error("pb: wire type " + w);
-    (o[f] ??= []).push(v);
-  }
-  return o;
-}
 const geminiKey = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[0]; // matched key ("" = unpriced fallback)
 const geminiPrice = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[1];
 const normPath = (p) => path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();

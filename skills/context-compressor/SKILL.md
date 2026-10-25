@@ -22,7 +22,7 @@ Two independent reasons to checkpoint. Either one is enough:
 
 **Without the hook (claude.ai chat, other tools)**, you can't see token counts, so count turns and pastes instead. Count it as **soft** when any of these is true:
 - ~20-25 back-and-forth turns, or a few large pastes, logs, files or tool outputs.
-- 3 heavy turns (each read 300+ lines or got a big tool output), whatever the turn count.
+- Antigravity: `node ~/.agents/tools/agContext.mjs` prints `checkpoint` (measured growth past budget). Elsewhere, or when it can't read the store: 3 heavy turns (each read 300+ lines or got a big tool output), whatever the turn count.
 - A task or milestone just finished (feature works, bug fixed, decision made) and the chat is already long.
 - The topic is changing and the old history won't help.
 - The user mentions cost, limits, quota or slowness.
