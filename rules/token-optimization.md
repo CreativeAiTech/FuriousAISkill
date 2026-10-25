@@ -17,9 +17,9 @@ The main session is the **brain**: it classifies, plans, writes specs and review
 | :--- | :--- |
 | **Trivial**: answer from loaded context, ≤2 quick tool calls, one-line edit | Brain inline |
 | **Collect**: search, read 3+ files, logs, git history, web | Small read-only subagent; returns paths, lines, facts |
-| **Mechanical or well-specified edits** | Worker with a tight spec (goal, files, constraints, done-when) |
+| **Mechanical or well-specified edits**, any number of files | Worker with a tight spec (goal, files, constraints, done-when) |
 | **Verify**: typecheck, tests, lint, build | Small verifier; pass/fail in ≤3 lines |
-| **Judgment**: architecture, unknown-cause bugs, security, final review | Brain specs, worker implements, brain reviews the **diff** |
+| **Judgment**: architecture, unknown-cause bugs, ambiguity, security, final review | Brain specs, worker implements, brain reviews the **diff** |
 
 - Run independent subagents in parallel, each with only the files it needs.
 - A worker fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
