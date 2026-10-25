@@ -350,26 +350,6 @@ for (const s of sessions) {
 }
 const routingTiers = Object.keys(routing).filter((k) => routing[k].n > 0);
 
-const REPOMIX_RE = /\bnpx\b[^|;&\n]*\brepomix@/; // real invocations only, not greps that mention it
-let repomixCalls = 0;
-let repomixOutputChars = 0;
-let repomixWithOutput = 0;
-for (const s of sessions) {
-  for (const tu of s.toolUses.values()) {
-    const cmd = String((tu.input && (tu.input.command || tu.input.CommandLine)) || "");
-    if (REPOMIX_RE.test(cmd)) repomixCalls++;
-  }
-  for (const r of s.results) {
-    const tu = s.toolUses.get(r.id);
-    if (!tu) continue;
-    const cmd = String((tu.input && (tu.input.command || tu.input.CommandLine)) || "");
-    if (REPOMIX_RE.test(cmd)) {
-      repomixOutputChars += (r.chars || 0);
-      repomixWithOutput++;
-    }
-  }
-}
-
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
 const wasteful = spawnRows.filter((r) => r.savings < 0);
 
@@ -738,8 +718,6 @@ L.push("", `| Total over window | $ | % of spend |`, `| :-- | --: | --: |`,
   `| Project | ${usd(projectCost)} | ${pct(projectCost)} |`, "");
 
 L.push(`## Delegation`, "");
-const repomixAvg = repomixWithOutput ? fmt(tok(repomixOutputChars / repomixWithOutput)) : 0;
-L.push(`repomix calls: ${repomixCalls}${repomixCalls ? ` (avg ~${repomixAvg} tokens of output)` : ""}`, "");
 if (!totalSpawns) {
   L.push(`**No subagents spawned in ${sessions.length} sessions: delegation rules add overhead but saved nothing yet.**`, "");
 } else {
