@@ -90,12 +90,16 @@ The top tier (Opus / Pro class, at high effort) is the **minimum** for any of th
 
 **Know what you're running on.** Your system prompt names your model; trust that, not your assumption. Re-check before each top-tier decision, not only at session start: Claude Code can switch from Opus to Sonnet when Opus usage runs out, and a failed Opus subagent call must never turn into "I'll just do it myself." Opus at low or medium effort isn't top tier for hard work either, and a session can't raise its own effort (Claude Code refuses it). So when a trigger fires below high effort: a contained question → spawn an Opus subagent with `effort: "high"` automatically (no confirmation, except the large-quota rule above) and have it write the decision note; a big decision that depends on this conversation's context → ask the user in one line to raise the effort to high, then continue.
 
-**High vs max.** The top tier is the model; effort only sets how long it thinks. **High is the default** for every top-tier decision. Use `effort: "max"` only when at least one holds:
+**High vs xhigh vs max.** The top tier is the model; effort only sets how long it thinks (ladder: `low` → `medium` → `high` → `xhigh` → `max`). "Ultra" is not an effort level: `/code-review ultra` is a user-run, billed cloud review, and "ultracode" is a prompt keyword that opts into multi-agent workflows. **High is the default** for every top-tier decision. Use `effort: "xhigh"` when either holds:
+1. **First retry**: high gave a wrong or unclear answer once.
+2. **Tangled constraints**: concurrency or shared state, 3+ constraints that pull against each other, or a top-tier change spanning 4+ files.
+
+Use `effort: "max"` only when at least one holds:
 1. **Silent-failure math**: an error typecheck and normal tests won't catch (transforms, kinematics, numeric stability, probability, crypto).
 2. **Costly to undo once shipped**: money or payouts, deleting user data, migrations of saved data or schemas already in users' hands, a released public contract.
 3. **Security analysis**: auth bypass, injection, secrets exposure.
-4. **Retry**: high already gave a wrong or unclear answer, or the same error came back twice.
-5. **Tangled constraints**: concurrency or shared state, or 3+ constraints that pull against each other.
+4. **Second retry**: xhigh also failed, or the same error came back twice.
+
 Caught before code, reversible, or a data-vs-spec ruling → high. Projects can list their own max areas under the "Minimum tier" table.
 
 **Main-session model per session.** The brain doesn't have to be the top model all day: a whole session of Mid-tier work (feature work in one module, UI, pipeline tooling, tests) runs well on a Mid main session, with top-tier calls escalated to a top-model subagent at high. After claiming the task, if the main session is top tier and the task is Mid or Small, say once in one line: `Mid-tier task: switching this session to <mid model> stretches quota ≈1.7x; decisions still escalate to <top model>.` Never switch it yourself and don't repeat it. A Mid main session that hits a minimum-tier trigger escalates, never decides (the table below).
