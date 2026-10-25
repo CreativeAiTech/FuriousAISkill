@@ -43,6 +43,8 @@ About 20+ turns with heavy tool output, or right after a milestone: checkpoint w
 
 ## 6. Name the session after the task
 Once you know the task (a "continue" resume, or a request that turns into one task), rename the session
-`<HHMM>-<ID> <short task>` (local 24h time, ticket ID if any), prefixed `C-` on a continue/resume, e.g.
-`C-1930-PET-07 fox mask redo`. Claude Code desktop: `mcp__ccd_session_mgmt__set_session_title` with `session_id: "self"`.
+`<HHMM>-<ID> <short task>` (local 24h time, ticket ID if any), e.g. `1930-PET-07 fox mask redo`.
+Prefix `C-` only when this session picks up **unfinished work** from an earlier one (Current Focus `in-progress`/`blocked`
+owned by you, or a task a previous session started but didn't finish), e.g. `C-1930-PET-07 fox mask redo`. "Continue" that
+starts a fresh ticket (next pick from the backlog, a `needs-review` handed over by another agent, focus `idle`) is a new task: no `C-`. Claude Code desktop: `mcp__ccd_session_mgmt__set_session_title` with `session_id: "self"`.
 Tools without a rename tool skip it.
