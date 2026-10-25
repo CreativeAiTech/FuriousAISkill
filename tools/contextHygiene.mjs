@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
+import { MAP_MAX, dupCandidates, needsMap } from "./lib/ruleLint.mjs";
 
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf("--" + n); return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : d; };
@@ -194,27 +195,21 @@ if (ruleFiles.length) {
 }
 
 // h. Lean rules (decision 2026-10-25-lean-rules): hot topic files, duplicate rules, big files without a map index.
-const HOT = 0.7, DUP_MIN = 40, DUP_SHOWN = 10, MAP_MAX = 1500;
+const HOT = 0.7, DUP_SHOWN = 10;
 const leanRows = []; // report lines for the "Lean rules" section
 const hot = ruleSessions ? ruleFiles.filter((f) => ruleAge[f] >= RULE_GRACE && ruleReads[f] / ruleSessions > HOT) : [];
 for (const f of hot) leanRows.push(`| hot | .agents/rules/${f} | read in ${ruleReads[f]} of ${ruleSessions} sessions (${Math.round(ruleReads[f] / ruleSessions * 100)}%) | fold back into core |`);
 if (hot.length) add({ check: "h", what: `${hot.length} on-demand rule file(s) read in over ${HOT * 100}% of sessions`, measured: hot.map((f) => `.agents/rules/${f} (${ruleReads[f]}/${ruleSessions})`).join(", "), why: "a file nearly every session reads is core in disguise and costs an extra tool call each time", fix: "fold it back into the always-on rules file", save: 0 });
 const leanSet = [globalMd, projMd, path.join(project, "AGENTS.md"), path.join(project, "GEMINI.md")].filter((f) => fs.existsSync(f) && fs.statSync(f).isFile());
-const normLine = (l) => l.replace(/[*`]/g, "").replace(/^\s*(?:-\s*)?/, "").replace(/\s+/g, " ").trim().toLowerCase();
 const seenLines = {}; // normalized line -> Set of file keys
-for (const f of leanSet) for (const raw of (read(f) || "").split("\n")) {
-  if (/^\s*#/.test(raw)) continue;
-  const n = normLine(raw);
-  if (n.length < DUP_MIN || /^[|:\s-]+$/.test(n)) continue;
-  (seenLines[n] ||= new Set()).add(rel(f));
-}
+for (const f of leanSet) for (const n of dupCandidates(read(f))) (seenLines[n] ||= new Set()).add(rel(f));
 const dups = Object.entries(seenLines).filter(([, s]) => s.size >= 2);
 for (const [n, s] of dups.slice(0, DUP_SHOWN)) leanRows.push(`| duplicate | ${[...s].join(", ")} | "${n.length > 70 ? n.slice(0, 67) + "..." : n}" | keep in one file |`);
 if (dups.length > DUP_SHOWN) leanRows.push(`| duplicate | (more) | ${dups.length - DUP_SHOWN} further duplicate line(s) not shown | |`);
 if (dups.length) add({ check: "h", what: `${dups.length} rule line(s) duplicated across always-on files`, measured: [...new Set(dups.flatMap(([, s]) => [...s]))].join(", "), why: "the same text is loaded twice every session", fix: "keep each rule in one file and point to it", save: tok(dups.reduce((s, [n]) => s + n.length, 0)) });
 for (const f of leanSet) {
   const t = read(f) || "", n = tok(t.length);
-  if (n > MAP_MAX && !/before you/i.test(t)) {
+  if (needsMap(t)) {
     leanRows.push(`| no map index | ${rel(f)} | ${n} est. tokens (limit ${MAP_MAX}), no "Before you" map | add a trigger table pointing at on-demand files |`);
     add({ check: "h", what: `${rel(f)} has no map index`, measured: `${n} est. tokens (over ${MAP_MAX}), no "Before you" text`, why: "a big always-on file without a trigger table can't be slimmed into on-demand files", fix: "add a 'Before you...' trigger table and move rarely needed rules out", save: 0 });
   }

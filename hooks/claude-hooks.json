@@ -33,5 +33,17 @@
         }
       ]
     }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "Edit|Write|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    }
   ]
 }
