@@ -109,7 +109,7 @@ for (const f of [".agents/BACKLOG.md", ".agents/STATE.md", "CONTEXT.md"]) {
   const n = tok(t.length); sizes[f] = n;
   if (n > ONDEMAND_MAX) {
     const done = (t.match(/^\s*[-*]\s*\[x\]/gim) || []).length;
-    add({ check: "e", what: `${f} is large`, measured: `${n} est. tokens (limit ${ONDEMAND_MAX})${f.includes("BACKLOG") ? `, ${done} done [x] items` : ""}`, why: "read on demand (every 'continue'), so each read costs the whole file", fix: "archive done items to .agents/archive/ and keep only open work", save: Math.round((n - ONDEMAND_MAX) * 0.5) });
+    add({ check: "e", what: `${f} is large`, measured: `${n} est. tokens (limit ${ONDEMAND_MAX})${f.includes("BACKLOG") ? `, ${done} done [x] items` : ""}`, why: "read on demand (every 'continue'), so each read costs the whole file", fix: "archive done items (Crownspire: node tools/agentBrief.mjs archive). Kit baton.mjs does not read an archive yet, so elsewhere moving [x] lines breaks needs: checks", save: Math.round((n - ONDEMAND_MAX) * 0.5) });
   }
 }
 
