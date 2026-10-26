@@ -19,7 +19,7 @@
 // Env vars CC_WATCH_SOFT and CC_WATCH_HARD override the growth thresholds.
 //
 // Stale session (UserPromptSubmit, once per session): the chat started more than CC_WATCH_MAX_AGE_H hours ago
-//   (default 24), or the kit (~/.agents) or the project's rules/skills got a commit after it started. A clear would
+//   (default 24). A clear would
 //   keep the old worktree, branch and loaded skills, so at the next task boundary the agent opens a NEW session
 //   (desktop start_session, brief "continue") instead of clearing; without that tool it asks the user for a new chat.
 
@@ -117,19 +117,13 @@ function sessionStart(transcriptPath) {
   }
 }
 
-// Why this session is stale, or "" if it isn't. Age first (cheap), then newer commits to the kit or project rules.
-function staleReason(cwd, startMs) {
+// Why this session is stale, or "" if it isn't. Age only: a "rules changed since start" check can't tell this
+// chat's own commits from other agents', so it fired falsely in sessions that edit rules (removed 2026-10-26).
+function staleReason(startMs) {
   if (!startMs) return "";
   const maxH = Number(process.env.CC_WATCH_MAX_AGE_H) || 24;
   const ageH = (Date.now() - startMs) / 36e5;
-  if (ageH >= maxH) return `this chat started ${Math.floor(ageH)}h ago`;
-  const lastCommit = (dir, paths) => {
-    const r = require("child_process").spawnSync("git", ["log", "-1", "--format=%ct", "--all", "--", ...paths], { cwd: dir, timeout: 3000, encoding: "utf8", windowsHide: true });
-    return r.status === 0 ? Number(String(r.stdout).trim()) * 1000 || 0 : 0;
-  };
-  if (lastCommit(path.join(os.homedir(), ".agents"), ["rules", "skills", "hooks", "agents"]) > startMs) return "the FuriousAI kit (skills/rules/hooks) changed after this chat started";
-  if (lastCommit(cwd, ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".agents/rules", ".agents/skills", ".claude"]) > startMs) return "this project's rules or skills changed after this chat started";
-  return "";
+  return ageH >= maxH ? `this chat started ${Math.floor(ageH)}h ago` : "";
 }
 
 const NEW_SESSION =
@@ -243,7 +237,7 @@ const growth = current - baseline;
 
 const state = loadState(input.session_id);
 const cwdNow = input.cwd || process.cwd();
-const stale = state.stale || staleReason(cwdNow, sessionStart(input.transcript_path));
+const stale = state.stale || staleReason(sessionStart(input.transcript_path));
 const profile = loadProfile(mainRoot(cwdNow));
 const t = (profile && profile.thresholds) || {};
 const SOFT = Number(process.env.CC_WATCH_SOFT) || t.soft || DEFAULT_SOFT;
