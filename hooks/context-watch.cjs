@@ -19,7 +19,7 @@
 // Env vars CC_WATCH_SOFT and CC_WATCH_HARD override the growth thresholds.
 //
 // Stale session (UserPromptSubmit, once per session): the chat started more than CC_WATCH_MAX_AGE_H hours ago
-//   (default 12), or the kit (~/.agents) or the project's rules/skills got a commit after it started. A clear would
+//   (default 24), or the kit (~/.agents) or the project's rules/skills got a commit after it started. A clear would
 //   keep the old worktree, branch and loaded skills, so at the next task boundary the agent opens a NEW session
 //   (desktop start_session, brief "continue") instead of clearing; without that tool it asks the user for a new chat.
 
@@ -120,7 +120,7 @@ function sessionStart(transcriptPath) {
 // Why this session is stale, or "" if it isn't. Age first (cheap), then newer commits to the kit or project rules.
 function staleReason(cwd, startMs) {
   if (!startMs) return "";
-  const maxH = Number(process.env.CC_WATCH_MAX_AGE_H) || 12;
+  const maxH = Number(process.env.CC_WATCH_MAX_AGE_H) || 24;
   const ageH = (Date.now() - startMs) / 36e5;
   if (ageH >= maxH) return `this chat started ${Math.floor(ageH)}h ago`;
   const lastCommit = (dir, paths) => {
