@@ -57,6 +57,19 @@ Native subagents work **under the parent's ticket**: give each a goal, owned fil
 
 Native agents inherit the model unless the tool actually supports an explicit override. Use only the model and effort controls exposed by the current environment. Do not invent a cheaper model, change the main session's model yourself, or assume a tool has another provider's agent types.
 
+### Codex worker defaults
+
+Use the currently exposed native model list and the rank table; a rank is a project role, not a provider guarantee. Register exact IDs before routing and leave unfamiliar variants gated. The registered GPT worker routes are:
+
+| Work | Native model | Effort starting point |
+| :--- | :--- | :--- |
+| Inventory, extraction, simple checks | `gpt-6-luna` (small) | low for mechanical work; high for a harder scan |
+| Implementation from a decided spec | `gpt-6.1-sol` (mid); `gpt-6-sol` when explicitly available | medium |
+| Bounded visual/computer-use work | `gpt-6.1-terra` (mid), with the required tools exposed | medium |
+| Top-tier ruling or demanding independent review | `gpt-6-astra` (top), or the existing top-ranked main brain | high |
+
+Pass both model and supported effort explicitly so helpers do not inherit an expensive main setting by accident. If the spawn API requires fresh context for overrides, use that mode and supply a self-contained spec. Effort never changes model rank. A lower-tier native worker may execute the brain's decided spec and return its result; the parent retains judgment, verification and closure. Standalone fallback-session restrictions still apply. Do not switch the main model or rewrite global configuration to achieve this.
+
 ## Step 4: Pick the tier
 
 | Tier | Typical work |

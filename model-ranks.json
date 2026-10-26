@@ -5,18 +5,23 @@
       "haiku",
       "\\blite\\b",
       "\\bmini\\b",
-      "\\bnano\\b"
+      "\\bnano\\b",
+      "^gpt-6-luna$"
     ],
     "mid": [
       "sonnet",
-      "flash"
+      "flash",
+      "^gpt-6\\.1-sol$",
+      "^gpt-6-sol$",
+      "^gpt-6\\.1-terra$"
     ],
     "top": [
       "opus",
       "fable",
       "argon",
       "gemini[\\w.\\s-]*\\bpro\\b",
-      "^gpt-6$"
+      "^gpt-6$",
+      "^gpt-6-astra$"
     ]
   },
   "allowed": {
