@@ -94,7 +94,7 @@ End the reply with a short block in this shape:
 > **This chat is getting long (~N turns / ~Xk tokens). Start fresh to save tokens. Checkpoint saved.**
 > Then one of the two resume options below.
 
-**Claude Code (file saved in the project):** tell them to run `/clear` or open a new session in the same folder and type `continue`. If the context-watch hook is installed, the new chat is pointed at `CONTEXT.md` automatically; otherwise give this one-liner to paste:
+**Claude Code (file saved in the project):** if you have a self-clear tool (desktop `clear_session` with `session_id: "self"`), clear the chat yourself as the last call, without asking, and say "type `continue` here to resume" (rules: `~/.agents/rules/topics/checkpoints.md` § Auto-clear). Otherwise tell them to run `/clear` or open a new session in the same folder and type `continue`. If the context-watch hook is installed, the new chat is pointed at `CONTEXT.md` automatically; otherwise give this one-liner to paste:
 ```
 Read CONTEXT.md in this folder and continue from its "Next step". Don't re-summarize it.
 ```

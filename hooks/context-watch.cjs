@@ -242,11 +242,12 @@ if ((growth >= HARD || forced) && (state.level < 2 || growth - state.lastHardAt 
         `[context-watch v${VERSION}] This conversation is large (${stats}); every turn now resends all of it. ` +
         `Answer the user's message normally first. ` +
         (saved
-          ? savedNote + `Then end the reply with this line (and nothing more about checkpoints): ${freshLine}`
+          ? savedNote + `Then end the reply with this line (and nothing more about checkpoints): ${freshLine} `
           : `Then, at the end of the same reply, use the context-compressor skill: ` +
-        `write or update CONTEXT.md in the project root, and tell the user in 2-3 lines to run /clear or start a new session in this folder ` +
-        `(the new chat is pointed at CONTEXT.md automatically). Include the short paste-ready resume prompt from the skill. ` +
-        `Exception: if you are mid-way through a delicate step whose recent output still matters, finish that step and checkpoint at the next natural break.`),
+        `write or update CONTEXT.md in the project root (the next chat is pointed at it automatically). `) +
+        `Auto-clear: if you have the clear_session tool (load it via ToolSearch if deferred), call it with session_id "self" as the last call of the reply, ` +
+        `without asking, and say "type continue here to resume" instead of asking for a fresh chat; without that tool, tell the user to run /clear or open a new chat in this folder. ` +
+        `Exception: if you are mid-way through a delicate step whose recent output still matters, or a question to the user is still open, finish that first and checkpoint at the next natural break.`,
     },
   });
 }
