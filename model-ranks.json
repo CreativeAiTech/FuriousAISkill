@@ -15,7 +15,8 @@
       "opus",
       "fable",
       "argon",
-      "gemini[\\w.\\s-]*\\bpro\\b"
+      "gemini[\\w.\\s-]*\\bpro\\b",
+      "^gpt-6$"
     ]
   },
   "allowed": {

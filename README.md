@@ -1,6 +1,6 @@
 # FuriousAISkill
 
-**Run Claude Code, Gemini (Antigravity) and other AI agents on one repo, cheaply and without them stepping on each other.**
+**Run Claude Code, Gemini (Antigravity), Codex and other AI agents on one repo, cheaply and without them stepping on each other.**
 No server, no database: just markdown rules, a few small Node scripts, and git.
 
 If you use more than one AI coding agent (or several sessions of the same one), you have probably seen this:
@@ -16,7 +16,7 @@ used daily on a real game project.
 - **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
 - **Token report** (`tools/tokenReport.mjs`): where your tokens went, and how much delegation actually saved.
 
-One `sync.mjs` copies everything into Claude Code (`~/.claude`) and Antigravity (`~/.gemini`), so every tool follows the same rules.
+`sync.mjs` maintains the supported Claude Code (`~/.claude`) and Antigravity (`~/.gemini`) copies. Codex discovers canonical skills directly in `~/.agents/skills` and project `.agents/skills`; no additional Codex copy is needed.
 Status: personal kit, shared as-is. MIT licensed, issues welcome.
 
 ## Install
@@ -28,7 +28,7 @@ node ~/.agents/sync.mjs
 
 Tip: a project can run this from its install script (clone if missing, fast-forward when clean, then sync) so every machine stays current.
 
-`sync.mjs` copies the kit into every tool:
+`sync.mjs` generates these Claude Code and Antigravity integrations:
 
 | Source | Claude Code | Antigravity |
 | :--- | :--- | :--- |
@@ -40,6 +40,8 @@ Tip: a project can run this from its install script (clone if missing, fast-forw
 Generated copies are marked. Sync removes stale generated copies and never touches hand-written files.
 Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.agents/skills/`), and project rules win.
 
+**Codex:** use the source skills from `~/.agents/skills` and the project skills from `.agents/skills` ([official skills documentation](https://learn.chatgpt.com/guides/best-practices)). Invoke the relevant skill, or let project `AGENTS.md` entry guidance reference canonical kit rules. This integration does not install a global Codex AGENTS.md, configuration or hooks. Claude-specific hooks, agent definitions, transcript metrics and automatic startup reports do not become Codex features; run applicable commands explicitly and report their actual results.
+
 ## Updating
 
 Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other machines pick it up on the next `yarn install`.
@@ -48,7 +50,7 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | Item | Owns |
 | :--- | :--- |
 | `rules/token-optimization.md` | Lean context, generic lifecycle, bounded tool use, checkpoint trigger |
-| `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Grok), model tier, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
+| `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Codex / Grok), actual model tier, native subtasks versus persistent handoffs, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 | `tools/contextProfile.mjs` | Context profile: the project's measured starting context, heavy-turn size and window headroom; sets context-watch's nudges, re-runs daily at session start, report at `.agents/reports/context-profile.md` |
 | `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from context-watch, report at `.agents/reports/context-hygiene.md` |

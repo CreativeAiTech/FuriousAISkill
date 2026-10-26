@@ -23,16 +23,17 @@ The main session is the **brain**: it classifies, plans, writes specs and review
 
 - Run independent subagents in parallel, each with only the files it needs.
 - A worker fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
-- **Hard work needs the top tier** (Opus / Pro class, high effort): architecture or design, anything costly to reverse, a bug unexplained after one real attempt, the same error twice, conflicting constraints, security, data-loss or money risk, plus any area the project adds. Check the model you're *actually* on before each such decision: tools silently fall back to a smaller model when quota runs out.
+- **Hard work needs the top tier** (a top-ranked brain, high effort): architecture or design, anything costly to reverse, a bug unexplained after one real attempt, the same error twice, conflicting constraints, security, data-loss or money risk, plus any area the project adds. Check the model you're *actually* on before each such decision: tools silently fall back to a smaller model when quota runs out.
 - **Decide high, execute low, never guess.** Below the required tier, escalate (how: escalation.md). The top model writes the decision down; lower tiers carry it out, never re-decide. A new decision point mid-execution → escalate again.
 - **Can't escalate? Never decide below tier.** Hard to reverse → stop and queue it. Reversible → labeled DRAFT only (escalation.md).
-- The user never names a model: pick the smallest that does the job well.
-- **Delegate only to a cheaper tier.** Same tier → inline, unless a big messy task needs context isolation. Every spawn gets a tight spec, line-range reads, and a stop point (report back after ~30 tool calls).
+- If the user has not chosen a model, pick the smallest available model that does the job well. Respect explicit choices and project model gates; never claim to change the main model yourself.
+- **Prefer a cheaper capable tier.** A bounded same-tier helper may reduce latency or isolate context; state that purpose, never assume token savings. Every spawn gets a tight spec, targeted reads and a stop point (report back after ~30 calls). Native helpers stay under the parent ticket; persistent cross-tool work uses the shared backlog. Use only exposed model/effort controls; otherwise helpers inherit the model.
 
 | Tool | Small (collect, verify) | Mid (implement) | Brain |
 | :--- | :--- | :--- | :--- |
 | Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session (opus) |
-| Antigravity | `research` / `flash_lite` (never Flash) | inline when main is Flash; `flash` worker only under a Pro main | main session |
+| Antigravity | `research` / `flash_lite` where available | inline when main is Flash; `flash` worker under a Pro main | main session, only on an actually top-ranked model |
+| Codex | available native helper; inherits model unless an override is supported | bounded worker with disjoint files or read-only scope | main session, only on an actually top-ranked model |
 
 Agent choice across tools, task specs, handoff: `model-orchestrator`.
 

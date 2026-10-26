@@ -26,7 +26,7 @@ const QUOTA_REL = path.join(".agents", "QUOTA.md");
 const RANKS = ["small", "mid", "top"];
 
 export const DEFAULT_RANKS = {
-  ranks: { small: ["haiku", "\\blite\\b", "\\bmini\\b", "\\bnano\\b"], mid: ["sonnet", "flash"], top: ["opus", "fable", "argon", "gemini[\\w.\\s-]*\\bpro\\b"] },
+  ranks: { small: ["haiku", "\\blite\\b", "\\bmini\\b", "\\bnano\\b"], mid: ["sonnet", "flash"], top: ["opus", "fable", "argon", "gemini[\\w.\\s-]*\\bpro\\b", "^gpt-6$"] },
   allowed: {
     top: "Everything; the project's top-tier areas still at high effort.",
     mid: "feature work inside one module, UI, tooling, written specs. No top-tier decisions.",

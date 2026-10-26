@@ -7,8 +7,9 @@ Core rule lives in `~/.agents/rules/token-optimization.md` (decide high, execute
 ## Escalate (below the required tier)
 - Claude Code: spawn a subagent with `model: "opus"`, `effort: "high"`.
 - `effort: "xhigh"` only to retry a failed high attempt; never `max` (`model-orchestrator` Step 4, Effort ladder).
-- Ask the user first unless it is a contained question; an Opus call spends shared quota.
-- Antigravity: switch to the Pro-class model, or queue it for `@claude`.
+- For a large Claude escalation, ask before spending substantial shared quota unless already authorized; contained questions use the available subagent controls.
+- Antigravity: use an available Pro-class model, or queue the work for an explicitly assigned capable brain (`@claude` / `@codex`).
+- Codex: for a contained question, use an actually top-ranked subagent with model/effort controls the current tool exposes. Otherwise queue an explicit `@codex` / `@claude` handoff and request a user model change if required. Never assume Claude controls work here or silently change the main model.
 - The top model writes the decision down (decision note or spec). Lower tiers link or quote it and carry it out, never re-decide.
 - A new decision point mid-execution: escalate again.
 
