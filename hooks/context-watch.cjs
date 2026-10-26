@@ -298,8 +298,9 @@ if ((growth >= HARD || forced) && (state.level < 2 || growth - state.lastHardAt 
         `write or update CONTEXT.md in the project root (the next chat is pointed at it automatically). `) +
         (stale
           ? `This session is also stale (${stale}). ` + NEW_SESSION
-          : `Auto-clear: if you have the clear_session tool (load it via ToolSearch if deferred), call it with session_id "self" as the last call of the reply, ` +
-            `without asking, and say "type continue here to resume" instead of asking for a fresh chat; without that tool, tell the user to run /clear or open a new chat in this folder. `) +
+          : `Never clear this chat yourself (no clear_session on "self"): the user still reviews it. If you have the start_session tool (load it via ToolSearch if deferred), ` +
+            `propose one fresh session (initiation "own_initiative", context "fresh", a worktree, brief "continue" plus one line on what is next) the user can start with a click; ` +
+            `without that tool, suggest opening a new chat in this folder and typing continue. The user decides when. `) +
         `Exception: if you are mid-way through a delicate step whose recent output still matters, or a question to the user is still open, finish that first and checkpoint at the next natural break.`,
     },
   });
