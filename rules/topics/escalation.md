@@ -1,12 +1,12 @@
 # Escalation and fallback mechanics
 
-Keywords: escalate, escalation, top tier, opus, max effort, quota, fallback, DRAFT, below tier, do it anyway, cannot escalate, @claude, decision note
+Keywords: escalate, escalation, top tier, opus, effort, xhigh, max effort, quota, fallback, DRAFT, below tier, do it anyway, cannot escalate, @claude, decision note
 
 Core rule lives in `~/.agents/rules/token-optimization.md` (decide high, execute low, never guess). Step detail: `model-orchestrator` Step 4.
 
 ## Escalate (below the required tier)
 - Claude Code: spawn a subagent with `model: "opus"`, `effort: "high"`.
-- `effort: "max"` only for: silent-failure math, costly-to-undo changes, security, a failed high attempt, or tangled constraints (`model-orchestrator` Step 4).
+- `effort: "xhigh"` only to retry a failed high attempt; never `max` (`model-orchestrator` Step 4, Effort ladder).
 - Ask the user first unless it is a contained question; an Opus call spends shared quota.
 - Antigravity: switch to the Pro-class model, or queue it for `@claude`.
 - The top model writes the decision down (decision note or spec). Lower tiers link or quote it and carry it out, never re-decide.
