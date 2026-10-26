@@ -17,6 +17,11 @@
 // plus a forced hard nudge once the total nears the window whatever the growth, and a one-time note when a session
 // starts well above the project's usual baseline. No profile yet: 30k/60k growth (v1.1.0 defaults).
 // Env vars CC_WATCH_SOFT and CC_WATCH_HARD override the growth thresholds.
+//
+// Stale session (UserPromptSubmit, once per session): the chat started more than CC_WATCH_MAX_AGE_H hours ago
+//   (default 12), or the kit (~/.agents) or the project's rules/skills got a commit after it started. A clear would
+//   keep the old worktree, branch and loaded skills, so at the next task boundary the agent opens a NEW session
+//   (desktop start_session, brief "continue") instead of clearing; without that tool it asks the user for a new chat.
 
 const fs = require("fs");
 const path = require("path");
@@ -97,6 +102,40 @@ function gitSaved(cwd) {
 }
 
 const k = (n) => Math.round(n / 1000) + "k";
+
+// First timestamp in the transcript = when this session started (ms), or 0.
+function sessionStart(transcriptPath) {
+  try {
+    const fd = fs.openSync(transcriptPath, "r");
+    const buf = Buffer.alloc(4096);
+    const n = fs.readSync(fd, buf, 0, buf.length, 0);
+    fs.closeSync(fd);
+    const m = buf.toString("utf8", 0, n).match(/"timestamp":"([^"]+)"/);
+    return m ? Date.parse(m[1]) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Why this session is stale, or "" if it isn't. Age first (cheap), then newer commits to the kit or project rules.
+function staleReason(cwd, startMs) {
+  if (!startMs) return "";
+  const maxH = Number(process.env.CC_WATCH_MAX_AGE_H) || 12;
+  const ageH = (Date.now() - startMs) / 36e5;
+  if (ageH >= maxH) return `this chat started ${Math.floor(ageH)}h ago`;
+  const lastCommit = (dir, paths) => {
+    const r = require("child_process").spawnSync("git", ["log", "-1", "--format=%ct", "--all", "--", ...paths], { cwd: dir, timeout: 3000, encoding: "utf8", windowsHide: true });
+    return r.status === 0 ? Number(String(r.stdout).trim()) * 1000 || 0 : 0;
+  };
+  if (lastCommit(path.join(os.homedir(), ".agents"), ["rules", "skills", "hooks", "agents"]) > startMs) return "the FuriousAI kit (skills/rules/hooks) changed after this chat started";
+  if (lastCommit(cwd, ["AGENTS.md", "CLAUDE.md", "GEMINI.md", ".agents/rules", ".agents/skills", ".claude"]) > startMs) return "this project's rules or skills changed after this chat started";
+  return "";
+}
+
+const NEW_SESSION =
+  `New session instead of clear: if you have the start_session tool (load it via ToolSearch if deferred), save first (baton; CONTEXT.md only for what git lacks), ` +
+  `then start one fresh session in this project with initiation "user_asked" (the user's standing ask), context "fresh", a worktree, and the brief "continue" plus one line on what is next; ` +
+  `end the reply with "Opened a fresh session with the latest skills and rules; this one can be archived." Without that tool, tell the user to open a new chat in this folder and type continue (not /clear). `;
 
 // Worktrees share the main checkout's profile (same slug rule as tools/contextProfile.mjs).
 function mainRoot(cwd) {
@@ -204,6 +243,7 @@ const growth = current - baseline;
 
 const state = loadState(input.session_id);
 const cwdNow = input.cwd || process.cwd();
+const stale = state.stale || staleReason(cwdNow, sessionStart(input.transcript_path));
 const profile = loadProfile(mainRoot(cwdNow));
 const t = (profile && profile.thresholds) || {};
 const SOFT = Number(process.env.CC_WATCH_SOFT) || t.soft || DEFAULT_SOFT;
@@ -217,6 +257,23 @@ if (profile && profile.baseline && !state.creep && baseline > profile.baseline *
   state.creep = true;
   saveState(input.session_id, state);
   creepNote = `context-watch: this chat started at ~${k(baseline)}, above this project's usual ~${k(profile.baseline)}. See .agents/reports/context-profile.md for what the start is made of.`;
+}
+
+if (stale && !state.staleNoted) {
+  state.stale = stale;
+  state.staleNoted = true;
+  saveState(input.session_id, state);
+  out({
+    systemMessage: `context-watch: stale session (${stale}). A fresh session will be opened at the next task boundary.`,
+    hookSpecificOutput: {
+      hookEventName: "UserPromptSubmit",
+      additionalContext:
+        `[context-watch v${VERSION}] Stale session: ${stale}. A fresh session loads newer skills and rules and gets a worktree from current master; a clear would keep this old one. ` +
+        `Answer the user's message normally first. If this reply finishes a task, or the user starts a new topic, do this at its end; otherwise do it at the first later reply that does. ` +
+        NEW_SESSION +
+        `Never mid-step, with unsaved work, or with a question to the user still open.`,
+    },
+  });
 }
 
 // Context shrank (e.g. after /compact): reset so warnings can fire again later.
@@ -245,8 +302,10 @@ if ((growth >= HARD || forced) && (state.level < 2 || growth - state.lastHardAt 
           ? savedNote + `Then end the reply with this line (and nothing more about checkpoints): ${freshLine} `
           : `Then, at the end of the same reply, use the context-compressor skill: ` +
         `write or update CONTEXT.md in the project root (the next chat is pointed at it automatically). `) +
-        `Auto-clear: if you have the clear_session tool (load it via ToolSearch if deferred), call it with session_id "self" as the last call of the reply, ` +
-        `without asking, and say "type continue here to resume" instead of asking for a fresh chat; without that tool, tell the user to run /clear or open a new chat in this folder. ` +
+        (stale
+          ? `This session is also stale (${stale}). ` + NEW_SESSION
+          : `Auto-clear: if you have the clear_session tool (load it via ToolSearch if deferred), call it with session_id "self" as the last call of the reply, ` +
+            `without asking, and say "type continue here to resume" instead of asking for a fresh chat; without that tool, tell the user to run /clear or open a new chat in this folder. `) +
         `Exception: if you are mid-way through a delicate step whose recent output still matters, or a question to the user is still open, finish that first and checkpoint at the next natural break.`,
     },
   });
