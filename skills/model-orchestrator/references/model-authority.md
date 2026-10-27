@@ -4,6 +4,8 @@ Keywords: model, rank, brain, architect, effort, benchmark, score, IQ, push, pub
 
 Checked **2026-10-27**. Canonical machine-readable data: [model-ranks.json](../../../model-ranks.json). Evaluate with [modelAuthority.mjs](../../../tools/modelAuthority.mjs).
 
+Those relative links describe the Git repository layout. In a generated Claude/Gemini skill copy, resolve them from the installed FuriousAISkill repository (normally `~/.agents`), not from the generated skill directory. In commands below, `<kit>` means that repository root.
+
 ## Decision rule
 
 Use **100 × recorded score / global leader score** on one comparable benchmark version. The leader is 100; a brain must be **at least 90** and run at a measured **high, xhigh, max or supported equivalent** effort. Do not round a result up across the gate. No score transfers between efforts, model releases, aliases, harnesses or fallback configurations. Unreported effort, unknown IDs and missing scores grant no brain authority.
