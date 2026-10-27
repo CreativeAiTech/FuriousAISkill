@@ -15,6 +15,7 @@
  *       (project: per baton.config.json push mode; kit: its own remote). Run only with the user's answer.
  */
 import fs from "node:fs";
+import { assess } from "./modelAuthority.mjs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -26,10 +27,10 @@ const QUOTA_REL = path.join(".agents", "QUOTA.md");
 const RANKS = ["small", "mid", "top"];
 
 export const DEFAULT_RANKS = {
-  ranks: { small: ["^gpt-6-luna$", "haiku", "\\blite\\b", "\\bmini\\b", "\\bnano\\b"], mid: ["sonnet", "flash", "^gpt-6\\.1-sol$", "^gpt-6-sol$", "^gpt-6\\.1-terra$"], top: ["opus", "fable", "argon", "gemini[\\w.\\s-]*\\bpro\\b", "^gpt-6$", "^gpt-6-astra$"] },
+  ranks: { small: ["^gpt-6-luna$"], mid: ["^gpt-6\\.1-sol$", "^gpt-6-sol$", "^gpt-6\\.1-terra$"], top: [] },
   allowed: {
-    top: "Everything; the project's top-tier areas still at high effort.",
-    mid: "feature work inside one module, UI, tooling, written specs. No top-tier decisions.",
+    top: "Candidate only; exact effort must pass modelAuthority. No automatic publish authority.",
+    mid: "Research, proposals and implementation from an approved specification. No brain decisions.",
     small: "content, docs, verify runs, tickets with a ready spec only.",
     unranked: "treated as small until ranked.",
   },
@@ -45,7 +46,8 @@ function rankTable(root) {
   const file = ranksFile(root);
   if (!file) return DEFAULT_RANKS;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    const table = JSON.parse(fs.readFileSync(file, "utf8"));
+    return table && typeof table === "object" && !Array.isArray(table) ? table : DEFAULT_RANKS;
   } catch {
     return DEFAULT_RANKS;
   }
@@ -56,7 +58,8 @@ export function modelRank(model, root) {
   if (!model || typeof model !== "string" || model === "<synthetic>") return "unknown";
   const { ranks } = rankTable(root);
   for (const rank of RANKS) {
-    if ((ranks?.[rank] || []).some((re) => {
+    if ((Array.isArray(ranks?.[rank]) ? ranks[rank] : []).some((re) => {
+      if (typeof re !== "string") return false;
       try {
         return new RegExp(re, "i").test(model);
       } catch {
@@ -67,13 +70,13 @@ export function modelRank(model, root) {
   return "unranked";
 }
 
-/** "top" | "fallback" | "unknown". Every rank below top (and unranked) is a fallback. */
-export function modelTier(model, root) {
+/** Top requires both candidate rank and current exact model/effort evidence. Missing effort is fallback. */
+export function modelTier(model, root, effort) {
   const rank = modelRank(model, root);
-  return rank === "unknown" ? "unknown" : rank === "top" ? "top" : "fallback";
+  return rank === "unknown" ? "unknown" : rank === "top" && assess(model, effort, rankTable(root)).eligible ? "top" : "fallback";
 }
 
-export function fallbackWarning(model, root) {
+export function fallbackWarning(model, root, effort) {
   const rank = modelRank(model, root);
   const scope = rankTable(root).allowed?.[rank];
   const learn =
@@ -82,9 +85,9 @@ export function fallbackWarning(model, root) {
         `\`node ~/.agents/tools/modelTier.mjs learn ${model} --rank <answer>\` (only the user's answer, never your guess).`
       : "";
   return (
-    `⛔ FALLBACK MODEL: this session runs on \`${model}\` (rank: ${rank}), not the top model (Opus / Fable / Gemini Pro / Argon class). ` +
+    `⛔ FALLBACK MODEL: this session runs on \`${model}\` (rank: ${rank}), not a verified brain configuration. ${assess(model, effort, rankTable(root)).reason} ` +
     `Before ANY work, stop and ask the user: "This project expects the top model; I'm on ${model}. Switch models, or continue in ` +
-    `fallback mode (ready-made specs only, no decisions)?" Continue only on an explicit yes.` +
+    `fallback mode (ready-made specs only, no decisions)?" Existing explicit fallback authorization carries forward. Otherwise continue only on an explicit yes. Learning a coarse rank does not establish benchmark eligibility.` +
     (scope ? ` Rank ${rank} scope: ${scope}` : "") + learn
   );
 }
@@ -114,12 +117,13 @@ export function readQuota(root) {
 }
 
 /** Records a known model for a tool in <root>/.agents/QUOTA.md. Returns true when the file changed. */
-export function recordModel(root, tool, model, source) {
-  const tier = modelTier(model, root);
+export function recordModel(root, tool, model, source, effort) {
+  const tier = modelTier(model, root, effort);
+  source = `${source}; effort=${effort || "unverified"}`;
   if (tier === "unknown" || !tool || !root) return false;
   const rows = readQuota(root);
   const prev = rows.find((r) => r.tool === tool);
-  if (prev && prev.model === model && prev.tier === tier) return false;
+  if (prev && prev.model === model && prev.tier === tier && prev.source === source) return false;
   const seen = new Date().toISOString().slice(0, 10);
   const next = rows.filter((r) => r.tool !== tool).concat({ tool, model, tier, seen, source });
   next.sort((a, b) => a.tool.localeCompare(b.tool));
@@ -201,11 +205,11 @@ async function cli(argv) {
     root = findRoot(process.cwd());
   }
   if (cmd === "rank" && model) {
-    console.log(`${model}: rank ${modelRank(model, root)}, tier ${modelTier(model, root)} (${ranksFile(root) || "built-in table"})`);
+    console.log(`${model}: routing rank ${modelRank(model, root)}, decision tier ${modelTier(model, root, flag("effort"))} (${ranksFile(root) || "built-in table"})`);
   } else if (cmd === "learn" && model) {
     console.log(await learnModel(model, flag("rank"), { root, push: !flag("no-push") }));
   } else {
-    console.error("Usage: modelTier.mjs rank <model> | learn <model> --rank top|mid|small [--root <dir>] [--no-push]");
+    console.error("Usage: modelTier.mjs rank <model> [--effort <effort>] | learn <model> --rank top|mid|small [--root <dir>] [--no-push]");
     process.exit(1);
   }
 }

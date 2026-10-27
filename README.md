@@ -42,6 +42,20 @@ Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.age
 
 **Codex:** use the source skills from `~/.agents/skills` and the project skills from `.agents/skills` ([official skills documentation](https://learn.chatgpt.com/guides/best-practices)). Invoke the relevant skill, or let project `AGENTS.md` entry guidance reference canonical kit rules. This integration does not install a global Codex AGENTS.md, configuration or hooks. Claude-specific hooks, agent definitions, transcript metrics and automatic startup reports do not become Codex features; run applicable commands explicitly and report their actual results.
 
+## Benchmark-based model authority
+
+The reusable policy and sourced comparison are in [model authority](skills/model-orchestrator/references/model-authority.md). Each model/effort pair is scored independently against the same benchmark version. A brain requires at least 90% of the leader and high effort or above. The 0–100 relative index is not IQ. Unknown, stale and below-threshold configurations only propose or execute approved specifications.
+
+```sh
+node tools/modelAuthority.mjs gpt-6-astra --effort max
+node tools/modelAuthority.mjs gpt-6-astra --effort high
+node --test tools/modelAuthority.test.mjs tools/modelTier.test.mjs
+```
+
+The checker exits 0 for an eligible pair, 2 for a non-eligible pair and 1 for usage/read errors. The model gate remains an advisory workflow: the Claude hook blocks once and does not establish effort; it is not a security boundary or a push hook. Actual model/effort/configuration must be verified before a brain decision. No rank authorizes publishing.
+
+Project `.agents/model-ranks.json` overrides must include current `authority` evidence as well as coarse ranks; legacy rank-only overrides no longer grant brain authority. Copy the kit table to start, preserve the global leader denominator, and record sources for new exact entries. Registry keys are not guaranteed endpoint IDs; resolve aliases explicitly.
+
 ## Updating
 
 Edit in `~/.agents`, run `node ~/.agents/sync.mjs`, then commit and push. Other machines pick it up on the next `yarn install`.
@@ -55,7 +69,7 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | `tools/contextProfile.mjs` | Context profile: the project's measured starting context, heavy-turn size and window headroom; sets context-watch's nudges, re-runs daily at session start, report at `.agents/reports/context-profile.md` |
 | `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from context-watch, report at `.agents/reports/context-hygiene.md` |
 | `hooks/rule-lint.mjs` + `tools/lib/ruleLint.mjs` | Write-time rule lint (Claude Code): after an edit to CLAUDE.md, AGENTS.md, GEMINI.md or `.agents/rules/**`, one warning line for a big file with no "Before you" table, a topic file without `Keywords:`, a line duplicated in another always-on file, or a missing trigger-table path; never blocks |
-| `tools/modelTier.mjs` + `hooks/model-check.mjs` | Model fallback gate (opt-in: `"modelGate": true` in `.agents/baton.config.json`): a non-top main model is stopped once and must ask the user (`baton.mjs --model <id>` for tools without hooks); ranks in `model-ranks.json`, an unranked model asks "top, mid or small?" and `modelTier.mjs learn` records the answer |
+| `tools/modelTier.mjs` + `tools/modelAuthority.mjs` + `hooks/model-check.mjs` | Model fallback gate (opt-in: `"modelGate": true` in `.agents/baton.config.json`): a non-top main model is stopped once and must ask the user (`baton.mjs --model <id> --effort <effort>` for tools without hooks); ranks in `model-ranks.json`, an unranked model asks "top, mid or small?" and `modelTier.mjs learn` records the coarse rank. Brain authority separately requires current exact model/effort evidence at >=90% of the benchmark leader; learning top alone cannot grant it |
 | `tools/tokenReport.mjs` | Token report: kit overhead vs measured delegation savings, context hygiene, verdict (see below) |
 | `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |
 

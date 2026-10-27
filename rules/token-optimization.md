@@ -1,6 +1,6 @@
 # Global Orchestration & Token Rules (all projects, all tools)
 
-Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, except that the default top-tier areas (`model-orchestrator` Step 4) are a floor: projects may add areas, and lowering one needs a written reason in the project's rules. The user has asked for this delegation in every project, so it counts as an explicit request to use subagents.
+Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, except that the default top-tier areas (`model-orchestrator` Step 4) are a floor: projects may add areas, and lowering one needs a written reason in the project's rules. Delegate when the user or applicable project instructions authorize it; installation alone does not grant cross-chat messaging or external-action permission.
 
 | Before you… | Read |
 | :--- | :--- |
@@ -11,7 +11,7 @@ Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict
 | rename the session (session title, rename, "continue" resume, `C-` prefix) | `~/.agents/rules/topics/session-naming.md` |
 
 ## 1. Orchestrator-first
-The main session is the **brain**: it classifies, plans, writes specs and reviews; cheaper subagents do the legwork. Before the first tool call on a request, state the route in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
+The main session coordinates work; it acts as the **brain** only when its exact model and effort pass `model-orchestrator/references/model-authority.md`. Other sessions research, propose and implement approved specs. Before the first tool call on a request, state the route in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
 
 | Work | Who |
 | :--- | :--- |
@@ -31,7 +31,7 @@ The main session is the **brain**: it classifies, plans, writes specs and review
 
 | Tool | Small (collect, verify) | Mid (implement) | Brain |
 | :--- | :--- | :--- | :--- |
-| Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session (opus) |
+| Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session at a benchmark-qualified model and effort |
 | Antigravity | `research` / `flash_lite` where available | inline when main is Flash; `flash` worker under a Pro main | main session, only on an actually top-ranked model |
 | Codex | available native helper; inherits model unless an override is supported | bounded worker with disjoint files or read-only scope | main session, only on an actually top-ranked model |
 

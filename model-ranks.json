@@ -1,33 +1,316 @@
 {
-  "_doc": "Kit model ranks read by tools/modelTier.mjs when a project has no .agents/model-ranks.json. Case-insensitive regexes, matched against the model id in rank order small -> mid -> top (so flash-lite is small, not mid; \b because 'gemini' contains 'mini'). No match = 'unranked': gated like any fallback; the warning asks the user to rank it and `modelTier.mjs learn` appends the answer here. New flagship names rarely follow a pattern: add each one explicitly.",
+  "_doc": "Coarse routing ranks are not brain authority. Exact model AND effort must pass tools/modelAuthority.mjs. IDs here are local registry keys; verify endpoint IDs and evaluated configuration before dispatch. Project overrides without authority evidence do not grant brain authority.",
   "ranks": {
     "small": [
-      "haiku",
-      "\\blite\\b",
-      "\\bmini\\b",
-      "\\bnano\\b",
-      "^gpt-6-luna$"
+      "^gpt-6-luna$",
+      "^claude-haiku-5-5$"
     ],
     "mid": [
-      "sonnet",
-      "flash",
       "^gpt-6\\.1-sol$",
       "^gpt-6-sol$",
-      "^gpt-6\\.1-terra$"
+      "^gpt-6\\.1-terra$",
+      "^gemini-3\\.8-flash$",
+      "^grok-4-7$",
+      "^deepseek-v4\\.1-flash-1017$",
+      "^qwen3\\.8-max-0902$",
+      "^kimi-k3-1-pro$"
     ],
     "top": [
-      "opus",
-      "fable",
-      "argon",
-      "gemini[\\w.\\s-]*\\bpro\\b",
-      "^gpt-6$",
-      "^gpt-6-astra$"
+      "^gpt-6-astra$",
+      "^claude-opus-5-5$",
+      "^claude-fable-5-1$",
+      "^claude-sonnet-5-5$",
+      "^gemini-4-argon$",
+      "^muse-wonder-full$"
     ]
   },
   "allowed": {
-    "top": "Everything; the project's top-tier areas still at high effort.",
-    "mid": "feature work inside one module, UI, tooling, written specs. No top-tier decisions.",
-    "small": "content, docs, verify runs, tickets with a ready spec only.",
-    "unranked": "treated as small until ranked (modelTier.mjs learn)."
+    "top": "Brain candidate only at a verified eligible effort/configuration. No automatic push, merge, deploy or scope expansion.",
+    "mid": "Research, proposals and implementation from an approved specification; brain reviews before integration.",
+    "small": "Research, proposals, checks and mechanical implementation from an approved specification.",
+    "unranked": "Research and proposals; obtain evidence before granting implementation or brain authority."
+  },
+  "authority": {
+    "benchmark": "AA Intelligence Index v4.3.2",
+    "checkedAt": "2026-10-27",
+    "maxAgeDays": 30,
+    "leaderScore": 58,
+    "thresholdPercent": 90,
+    "leaderSource": "https://artificialanalysis.ai/models/claude-opus-5-5",
+    "method": "100 * score / leaderScore; relative benchmark points, not IQ or percentage of real-world intelligence. Published raw scores are rounded. Gate uses the recorded scores without rounding normalized values.",
+    "entries": [
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-astra",
+        "effort": "medium",
+        "score": 50,
+        "source": "https://artificialanalysis.ai/models/gpt-6-astra-medium",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "score": 51,
+        "source": "https://artificialanalysis.ai/models/gpt-6-astra-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-astra",
+        "effort": "xhigh",
+        "score": 52,
+        "source": "https://artificialanalysis.ai/models/gpt-6-astra-xhigh",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-astra",
+        "effort": "max",
+        "score": 53,
+        "source": "https://artificialanalysis.ai/models/gpt-6-astra",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-sol",
+        "effort": "medium",
+        "score": 48,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-sol-medium",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "score": 50,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-sol-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-sol",
+        "effort": "xhigh",
+        "score": 51,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-sol-xhigh",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-sol",
+        "effort": "max",
+        "score": 52,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-sol",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-sol",
+        "effort": "high",
+        "score": 42,
+        "source": "https://artificialanalysis.ai/models/gpt-6-sol-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-sol",
+        "effort": "max",
+        "score": 48,
+        "source": "https://artificialanalysis.ai/models/releases/gpt-6-sol",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-terra",
+        "effort": "high",
+        "score": 44,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-terra-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6.1-terra",
+        "effort": "max",
+        "score": 48,
+        "source": "https://artificialanalysis.ai/models/gpt-6-1-terra",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-luna",
+        "effort": "high",
+        "score": 33,
+        "source": "https://artificialanalysis.ai/models/gpt-6-luna-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "OpenAI",
+        "model": "gpt-6-luna",
+        "effort": "max",
+        "score": 38,
+        "source": "https://artificialanalysis.ai/models/gpt-6-luna",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "medium",
+        "score": 51,
+        "source": "https://artificialanalysis.ai/models/claude-opus-5-5-medium",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "high",
+        "score": 54,
+        "source": "https://artificialanalysis.ai/models/claude-opus-5-5-high",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "xhigh",
+        "score": 56,
+        "source": "https://artificialanalysis.ai/models/claude-opus-5-5-xhigh",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-opus-5-5",
+        "effort": "max",
+        "score": 58,
+        "source": "https://artificialanalysis.ai/models/claude-opus-5-5",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-fable-5-1",
+        "effort": "medium",
+        "score": 49,
+        "source": "https://artificialanalysis.ai/models/comparisons/claude-fable-5-1-high-vs-claude-fable-5-1-medium",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-fable-5-1",
+        "effort": "high",
+        "score": 51,
+        "source": "https://artificialanalysis.ai/models/claude-fable-5-1-high",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-fable-5-1",
+        "effort": "xhigh",
+        "score": 53,
+        "source": "https://artificialanalysis.ai/models/comparisons/claude-fable-5-1-xhigh-vs-claude-fable-5-1",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-fable-5-1",
+        "effort": "max",
+        "score": 53,
+        "source": "https://artificialanalysis.ai/models/claude-fable-5-1",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "high",
+        "score": 47,
+        "source": "https://artificialanalysis.ai/models/comparisons/claude-sonnet-5-5-high-vs-claude-sonnet-5-xhigh",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-sonnet-5-5",
+        "effort": "max",
+        "score": 56,
+        "source": "https://artificialanalysis.ai/models/claude-sonnet-5-5",
+        "configuration": "default fallback enabled"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-haiku-5-5",
+        "effort": "high",
+        "score": 38,
+        "source": "https://artificialanalysis.ai/models/claude-haiku-5-5-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "Anthropic",
+        "model": "claude-haiku-5-5",
+        "effort": "max",
+        "score": 43,
+        "source": "https://artificialanalysis.ai/models/claude-haiku-5-5",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "Google",
+        "model": "gemini-4-argon",
+        "effort": "high",
+        "score": 53,
+        "source": "https://artificialanalysis.ai/models/gemini-4-argon",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "Google",
+        "model": "gemini-3.8-flash",
+        "effort": "high",
+        "score": 41,
+        "source": "https://artificialanalysis.ai/models/gemini-3-8-flash",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "xAI",
+        "model": "grok-4-7",
+        "effort": "high",
+        "score": 46,
+        "source": "https://artificialanalysis.ai/models/grok-4-7-high",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "xAI",
+        "model": "grok-4-7",
+        "effort": "xhigh",
+        "score": 46,
+        "source": "https://artificialanalysis.ai/models/grok-4-7",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "DeepSeek",
+        "model": "deepseek-v4.1-flash-1017",
+        "effort": "max",
+        "score": 45,
+        "source": "https://artificialanalysis.ai/models/deepseek-v4-1-flash-1017",
+        "configuration": "as evaluated by Artificial Analysis"
+      },
+      {
+        "provider": "Alibaba",
+        "model": "qwen3.8-max-0902",
+        "effort": "unreported",
+        "score": 45,
+        "source": "https://artificialanalysis.ai/models/creators/alibaba",
+        "configuration": "reasoning effort not reported; no brain authority"
+      },
+      {
+        "provider": "Meta",
+        "model": "muse-wonder-full",
+        "effort": "max",
+        "score": 56,
+        "source": "https://artificialanalysis.ai/models/muse-wonder-full",
+        "configuration": "no public API reported; capability evidence only"
+      },
+      {
+        "provider": "Moonshot",
+        "model": "kimi-k3-1-pro",
+        "effort": "unreported",
+        "score": 55,
+        "source": "https://artificialanalysis.ai/models/kimi-k3-1-pro",
+        "configuration": "reasoning effort not reported; no brain authority"
+      }
+    ]
   }
 }

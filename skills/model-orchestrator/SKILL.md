@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Route work among available coding agents and model tiers, delegate bounded subtasks, review results, and preserve cross-tool handoffs. Use for agent/model choice, delegation, quota or token planning, and switching tools mid-project.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # Model Orchestrator
@@ -13,7 +13,7 @@ Spend judgment where it matters and measure the cost of delegation. This skill o
 
 Read project entrypoints (AGENTS.md / CLAUDE.md / GEMINI.md) and use their task board, ownership, model gate, art pipeline, and verification commands. A direct user request takes precedence. Existing authorization carries forward; do not invent a new approval gate.
 
-Use the **actual running model**, not the product name, to establish its tier. A project rank table overrides the kit table; an unknown model is not automatically a brain. A top-ranked Codex model is a peer brain alongside top-ranked Claude and Gemini models. Preserve assigned tickets and active claims when choosing who works next.
+Use the **actual running model**, not the product name, to establish its tier. A project rank table overrides the kit table; an unknown model is not automatically a brain. A model is a brain only when its exact model/effort configuration passes the benchmark gate in [references/model-authority.md](references/model-authority.md). Read that reference before ranking, architecture, final review, or publishing. A coarse top rank alone is insufficient. Preserve assigned tickets and active claims when choosing who works next.
 
 ## Step 1: Pick the agent
 
@@ -22,7 +22,7 @@ Use the **actual running model**, not the product name, to establish its tier. A
 | **Gemini / Antigravity** `@gemini` | Routine edits, content, pipeline runs; default image work where the project uses Gemini | Top-tier decisions require an actually top-ranked model |
 | **Claude Code** `@claude` | Architecture, hard bugs, refactors, implementation and review | Tier follows the actual model; use its available tools |
 | **Codex** `@codex` | Architecture, hard bugs, refactors, implementation and review | Peer brain only on a top-ranked model; tool access and effort controls vary by session |
-| **xAI Grok** `@grok` | Wit, names, lore, divergent ideas, math/code second opinions | Paid external calls; advises, never decides top-tier work; no repo access |
+| **xAI Grok** `@grok` | Proposals, implementation or second opinions when suitable tools exist | Current scored configurations are below the brain gate; access and cost depend on the connector |
 | **User** `@user` | Secrets, account actions, taste and decisions reserved for the user | Do agent-executable work before asking for a concrete final approval |
 
 Choose the active capable top-ranked brain for judgment, respecting project ownership and available quota. Do not route every decision to Claude merely because an older table names it. Use measured availability/cost where known; do not assume a fixed scarcity order across providers.
@@ -66,9 +66,9 @@ Use the currently exposed native model list and the rank table; a rank is a proj
 | Inventory, extraction, simple checks | `gpt-6-luna` (small) | low for mechanical work; high for a harder scan |
 | Implementation from a decided spec | `gpt-6.1-sol` (mid); `gpt-6-sol` when explicitly available | medium |
 | Bounded visual/computer-use work | `gpt-6.1-terra` (mid), with the required tools exposed | medium |
-| Top-tier ruling or demanding independent review | `gpt-6-astra` (top), or the existing top-ranked main brain | high |
+| Top-tier ruling or demanding independent review | Exact eligible model/effort from the benchmark registry | Lowest measured effort that passes; Astra currently requires max |
 
-Pass both model and supported effort explicitly so helpers do not inherit an expensive main setting by accident. If the spawn API requires fresh context for overrides, use that mode and supply a self-contained spec. Effort never changes model rank. A lower-tier native worker may execute the brain's decided spec and return its result; the parent retains judgment, verification and closure. Standalone fallback-session restrictions still apply. Do not switch the main model or rewrite global configuration to achieve this.
+Pass both model and supported effort explicitly so helpers do not inherit an expensive main setting by accident. If the spawn API requires fresh context for overrides, use that mode and supply a self-contained spec. Effort changes brain eligibility; never transfer a score between efforts. A lower-tier native worker may execute the brain's decided spec and return its result; the parent retains judgment, verification and closure. Standalone fallback-session restrictions still apply. Do not switch the main model or rewrite global configuration to achieve this.
 
 ## Step 4: Pick the tier
 
@@ -78,15 +78,15 @@ Pass both model and supported effort explicitly so helpers do not inherit an exp
 | Mid | Features and refactors inside a module; implementation from a design |
 | Top | Architecture, difficult debugging, high-risk judgment, final review |
 
-Use the rank table and the actual model ID. A wrong result twice needs a better model, better specification, or missing information, rather than another identical retry.
+Use the rank table, actual model ID and actual effort. Before a brain decision, run `node <kit>/tools/modelAuthority.mjs <model-id> --effort <actual-effort>` with the applicable rank table. Exit 0 establishes benchmark eligibility, not task correctness or publish permission. A wrong result twice needs a better model, better specification, or missing information, rather than another identical retry.
 
-**Minimum tier: hard work goes straight to a top-ranked brain at high effort.** This includes architecture/design, costly-to-reverse decisions, unknown-cause bugs after a real attempt, conflicting constraints, security, data-loss or money risk, and the project's additional top-tier areas.
+**Minimum tier: hard work goes straight to a benchmark-qualified brain at its measured high-or-above effort.** This includes architecture/design, costly-to-reverse decisions, unknown-cause bugs after a real attempt, conflicting constraints, security, data-loss or money risk, and the project's additional top-tier areas.
 
 The default floor covers auth/sessions/permissions; money, wallets and payouts; schemas, migrations and persisted formats; public API/SDK/protocol contracts; secrets/cryptography; concurrency and shared or distributed state; deploy, infrastructure and CI that ships code; deleting or retaining user data; changes across 4+ files. Projects may add areas; lowering the floor needs a written reason in their minimum-tier table (`assets/min-tier.template.md`).
 
 ### Effort ladder
 
-Medium for execution; high for every top-tier ruling and for retrying a medium attempt that failed a test, typecheck or visual check; xhigh only to retry a failed high attempt; never max. If xhigh also fails, stop and report the missing information. Silent-failure math, costly-to-undo decisions and security need high plus a meaningful check (a targeted test, second review or preview); more thinking does not replace that evidence.
+Use a measured eligible high-or-above configuration for every brain ruling. Choose the least costly qualifying effort supported by the actual tool; max is permitted when it is the qualifying configuration. Medium and low can execute an approved specification but cannot make brain decisions. Unmeasured higher effort does not inherit a lower effort score. Two failures need investigation, a better specification, or another eligible brain. Silent-failure math, costly-to-undo decisions and security need high plus a meaningful check (a targeted test, second review or preview); more thinking does not replace that evidence.
 
 Check the actual model before each such decision: quota fallback can change it. Effort names and controls are provider-specific. Never claim to have changed your own model or effort. If required controls or a top model are unavailable, use a supported escalation or explain the constraint under the project's model gate.
 
@@ -98,6 +98,8 @@ Check the actual model before each such decision: quota fallback can change it. 
 | Top brain unavailable, reversible draft requested/authorized | Label the draft and queue top-tier review; commit nothing irreversible |
 
 Draft header: **DRAFT, below required tier.** Model: `<id>`; required tier and trigger; confidence; unknowns; review ticket. User permission to proceed below tier is draft authorization, not a model promotion.
+
+For models below 90% or with unverified effort, new design choices remain proposals. They may execute a brain-approved specification in an isolated branch; an eligible brain owns final review and integration. Publishing also requires the user's existing authorization, passing checks and the intended remote/branch; no model rank grants blanket push, force-push, merge or deploy permission.
 
 The deciding brain records the ruling in the project's decision folder, or its task spec when no folder exists. Use `assets/decision-note.template.md`: model, status, context, decision, why, rejected options, done-when, open questions, ripple. A dropped/superseded decision needs its dependent tickets, skills and checkpoint updated; executors check the note's status first. Lower tiers relay and execute the ruling; a new fork goes back to the brain.
 

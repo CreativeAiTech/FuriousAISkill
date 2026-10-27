@@ -4,6 +4,8 @@
 // (measured 2026-10-25, CLI 2.1.299), but by the first tool call the transcript holds the main session's first assistant
 // message with its real model id. Once per session: top model → record it in .agents/QUOTA.md, stay silent; fallback or
 // unranked → record it and deny this one call so the agent must stop and ask (and rank a new model). Later calls pass.
+// Effort is not established by this transcript reader: missing effort never grants top authority.
+// Verify the actual effort separately with modelAuthority.mjs; this is a one-time advisory hook, not a push guard.
 // Subagents (agent_id set) are skipped: they run small models by design. Fails open on any read/parse problem.
 import fs from "node:fs";
 import os from "node:os";

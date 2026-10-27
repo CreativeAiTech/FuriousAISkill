@@ -8,7 +8,7 @@
  *   <project>/.agents/baton.config.json   optional settings (written by `init`; see DEFAULTS below)
  *
  *   node ~/.agents/tools/baton.mjs init [--project <name>] [--push push-master|commit-only|none]   Write templates (never overwrites)
- *   node ~/.agents/tools/baton.mjs [--agent <name>] [--model <id>] [--hook]   Print the session brief (--hook: never fails)
+ *   node ~/.agents/tools/baton.mjs [--agent <name>] [--model <id>] [--effort <effort>] [--hook]   Print the session brief (--hook: never fails)
  *       --model: the main session's exact model id. With "modelGate": true in baton.config.json a non-top model gets a
  *       stop-and-ask warning as the brief's first line and sees only tickets with .agents/tasks/<ID>/spec.md (tools/modelTier.mjs).
  *   node ~/.agents/tools/baton.mjs log --agent <name> --done "<what>" [--next "<what>"]   Append a baton line, renew your leases
@@ -243,18 +243,18 @@ function autoBatonEntries(ctx) {
 // ---------------------------------------------------------------------------
 // Brief
 // ---------------------------------------------------------------------------
-function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false) {
+function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false, effort = "") {
   const out = [];
   const me = agentTag(ctx, agent);
   // Model gate (opt-in): the warning goes first so a model that skims still sees it. Claude Code's hook input has no
   // model; there hooks/model-check.mjs reads it from the transcript at the first tool call instead.
   const gate = Boolean(ctx.cfg.modelGate);
   if (typeof model !== "string") model = "";
-  const fallback = gate && modelTier(model, ctx.root) === "fallback";
-  if (gate && model) recordModel(ctx.root, me || "unknown-tool", model, "--model flag");
-  if (fallback) out.push(fallbackWarning(model, ctx.root), "");
+  const fallback = gate && modelTier(model, ctx.root, effort) === "fallback";
+  if (gate && model) recordModel(ctx.root, me || "unknown-tool", model, "--model flag", effort);
+  if (fallback) out.push(fallbackWarning(model, ctx.root, effort), "");
   else if (gate && !model && !fromHook) {
-    out.push("⚠️ Model not reported. Rerun with `--model <your exact model id>`. Not the top model → stop and ask the user before any work.", "");
+    out.push("⚠️ Model not reported. Rerun with `--model <your exact model id> --effort <your actual effort>`. Not the top model → stop and ask the user before any work.", "");
   }
   const stateText = readText(ctx.stateFile);
   const backlogText = readText(ctx.backlogFile);
@@ -795,7 +795,7 @@ export function main(argv = process.argv.slice(2), opts = {}) {
     if (command === "log") appendLog(ctx, flags);
     else if (command === "focus") updateFocus(ctx, flags);
     else if (["claim", "release", "block", "done"].includes(command)) ticketCommand(ctx, command, positional, flags);
-    else if (!command) console.log(buildBrief(ctx, flags.agent, opts.sections || {}, flags.model, Boolean(flags.hook)));
+    else if (!command) console.log(buildBrief(ctx, flags.agent, opts.sections || {}, flags.model, Boolean(flags.hook), flags.effort));
     else {
       console.error(`Unknown command "${command}". Commands: init, log, focus, claim, release, block, done (none = brief).`);
       process.exit(1);
