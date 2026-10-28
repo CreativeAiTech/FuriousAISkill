@@ -6,6 +6,8 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
+import { lastGate } from "./tokenReport.mjs";
+import { readCodexUsage } from "./lib/codexUsage.mjs";
 
 function runFixture(root, project, codexHome, out) {
   return execFileSync(process.execPath, [fileURLToPath(new URL("./tokenReport.mjs", import.meta.url)), "--project", project, "--codex-home", codexHome, "--out", out, "--summary"], {
@@ -31,7 +33,7 @@ const blob = (field, value) => {
 const number = (field, value) => Buffer.concat([varint(field * 8), varint(value)]);
 
 // All stores and their workspace URIs are synthetic and fixture-local.
-function antigravityDb(root, project, name, usage) {
+function antigravityDb(root, project, name, usage, model = "gemini-3.8-flash") {
   const dir = path.join(root, ".gemini", "antigravity", "conversations");
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, name + ".db"), db = new DatabaseSync(file);
@@ -40,7 +42,7 @@ function antigravityDb(root, project, name, usage) {
     db.prepare("INSERT INTO trajectory_metadata_blob VALUES (?, ?)").run("main", blob(1, blob(1, pathToFileURL(project).href)));
     if (usage) {
       const counters = Buffer.concat(Object.entries(usage).map(([field, value]) => number(Number(field), value)));
-      db.prepare("INSERT INTO gen_metadata VALUES (?, ?)").run(1, blob(1, Buffer.concat([blob(19, "gemini-3.8-flash"), blob(4, counters)])));
+      db.prepare("INSERT INTO gen_metadata VALUES (?, ?)").run(1, blob(1, Buffer.concat([blob(19, model), blob(4, counters)])));
     }
   } finally { db.close(); }
   return file;
@@ -189,3 +191,99 @@ for (const [label, usage, cost, baseline, gross] of [
     assert.equal(cell("ag_same_tier_pct"), "");
   });
 }
+
+test("AGT-81: model-prices.json prices gemini-4-argon-trial at argon rates (not flash) and Claude cachedInput rates", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-prices-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  fs.mkdirSync(path.join(root, ".agents"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".agents", "model-prices.json"), JSON.stringify({
+    schemaVersion: 1, currency: "USD", unit: "per million tokens", service: "direct-api-standard-text", maxAgeDays: 30,
+    entries: [
+      { model: "claude-opus-5-5", rates: { input: 4, cachedInput: 0.2, output: 20 } },
+      { model: "gemini-4-argon", rates: { input: 2, cachedInput: 0.1, output: 10 } },
+      { model: "gemini-3.8-flash", rates: { input: 0.75, cachedInput: 0.075, output: 3.75 } },
+    ],
+  }));
+
+  const claudeDir = path.join(root, ".claude", "projects", project.replace(/[^A-Za-z0-9]/g, "-"));
+  fs.mkdirSync(claudeDir, { recursive: true });
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  // Claude opus with 1M input, 1M cache read, 100k output -> (1M*4 + 1M*0.2 + 100k*20)/1e6 = $6.20 (legacy was $8.00)
+  fs.writeFileSync(path.join(claudeDir, "session.jsonl"), JSON.stringify({
+    type: "assistant", timestamp,
+    message: { id: "turn-1", model: "opus", usage: { input_tokens: 1000000, cache_read_input_tokens: 1000000, output_tokens: 100000 }, content: [] }
+  }));
+
+  // Antigravity gemini-4-argon-trial with 1M input (2), 1M cache read (5), 100k output (3) -> (1M*2 + 1M*0.1 + 100k*10)/1e6 = $3.10 (flash rate would be $1.20)
+  antigravityDb(root, project, "argon-session", { 2: 1000000, 5: 1000000, 3: 100000 }, "gemini-4-argon-trial");
+
+  const summary = runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+
+  assert.match(summary, /Claude 1 sessions, modeled spend \$6\.20/);
+  assert.match(summary, /Antigravity modeled spend \$3\.10/);
+  assert.match(report, /gemini-4-argon-trial \| 1 \| 1,000,000 \| 0 \| 1,000,000 \| 100,000 \| 0 \| 0% \| \$3\.10/);
+});
+
+test("AGT-81: codexUsage matches child cwd and worktrees, computes modeled cost from model-prices, keeps guardian unpriced", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-usage-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex");
+  const pricesPath = path.join(root, "model-prices.json");
+  fs.writeFileSync(pricesPath, JSON.stringify({
+    schemaVersion: 1, currency: "USD", unit: "per million tokens", service: "direct-api-standard-text", maxAgeDays: 30,
+    entries: [
+      { model: "gpt-6.1-sol", rates: { input: 2, cachedInput: 0.1, output: 10 } },
+    ],
+  }));
+
+  const subDir = path.join(project, "packages", "engine");
+  const wtDir = path.join(project, ".claude", "worktrees", "worker-branch");
+  fs.mkdirSync(path.join(codexHome, "sessions"), { recursive: true });
+
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  // Session 1: child cwd worker with gpt-6.1-sol (input 1000, cached 200, output 100)
+  // uncached 800 * 2 + cached 200 * 0.1 + output 100 * 10 = (1600 + 20 + 1000) / 1e6 = $0.00262
+  const usage1 = { input_tokens: 1000, cached_input_tokens: 200, cache_write_input_tokens: 0, output_tokens: 100, reasoning_output_tokens: 10, total_tokens: 1100 };
+  fs.writeFileSync(path.join(codexHome, "sessions", "worker.jsonl"), [
+    { type: "session_meta", timestamp, payload: { id: "child-worker", cwd: subDir, source: { subagent: { thread_spawn: {} } } } },
+    { type: "turn_context", timestamp, payload: { model: "gpt-6.1-sol" } },
+    { type: "event_msg", timestamp, payload: { type: "token_count", info: { total_token_usage: usage1, last_token_usage: usage1 } } },
+  ].map(r => JSON.stringify(r)).join("\n"));
+
+  // Session 2: worktree guardian with codex-auto-review (unpriced)
+  const usage2 = { input_tokens: 5000, cached_input_tokens: 0, cache_write_input_tokens: 0, output_tokens: 500, reasoning_output_tokens: 50, total_tokens: 5500 };
+  fs.writeFileSync(path.join(codexHome, "sessions", "guardian.jsonl"), [
+    { type: "session_meta", timestamp, payload: { id: "worktree-guardian", cwd: wtDir, source: { subagent: { other: "guardian" } } } },
+    { type: "turn_context", timestamp, payload: { model: "codex-auto-review" } },
+    { type: "event_msg", timestamp, payload: { type: "token_count", info: { total_token_usage: usage2, last_token_usage: usage2 } } },
+  ].map(r => JSON.stringify(r)).join("\n"));
+
+  const res = await readCodexUsage({ project, codexHome, pricesPath });
+  assert.equal(res.sessions.length, 2);
+  assert.equal(res.diagnostics.subdirFiles, 1);
+  assert.equal(res.diagnostics.worktreeFiles, 1);
+  assert.equal(res.pricedSessions, 1);
+  assert.equal(res.unpricedSessions, 1);
+
+  const s1 = res.sessions.find(s => s.id === "child-worker");
+  assert.equal(s1.priced, true);
+  assert.ok(Math.abs(s1.modeledCostUsd - 0.00262) < 0.000001);
+
+  const s2 = res.sessions.find(s => s.id === "worktree-guardian");
+  assert.equal(s2.priced, false);
+  assert.equal(s2.modeledCostUsd, null);
+  assert.equal(s2.unpricedReason, "guardian_role");
+});
+
+test("AGT-81: lastGate matches markdown-bolded, case-insensitive, and indented variants", () => {
+  assert.equal(lastGate("**GATE:** pass"), "pass");
+  assert.equal(lastGate("**GATE**: fail"), "fail");
+  assert.equal(lastGate("Gate: PASS"), "pass");
+  assert.equal(lastGate("  GATE: none"), "none");
+  assert.equal(lastGate("`GATE: pass`"), "pass");
+  assert.equal(lastGate("> **GATE**: pass"), "pass");
+  assert.equal(lastGate("- **GATE**: fail <yarn tsc>"), "fail");
+  assert.equal(lastGate("random response without gate line"), null);
+});

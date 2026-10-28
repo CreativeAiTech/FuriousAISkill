@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tokenReport: "is the agent kit worth having?" from Claude Code transcripts.
+// tokenReport: "is the agent kit worth having?" from Claude Code transcripts. (kit v1.9.0)
 // Compares the kit's fixed per-session token overhead with measured savings
 // (subagent delegation) and flags waste (late checkpoints, huge tool results).
 // Costs are modeled API-list-price equivalents, not billing or quota.
@@ -18,30 +18,105 @@ import { fileURLToPath } from "node:url";
 import { readCodexUsage } from "./lib/codexUsage.mjs";
 import { pbVarint, pbFields } from "./lib/agStore.mjs";
 
-// API list $/MTok; edit when prices change
-const PRICES = {
-  opus: { in: 5, out: 25 },
-  sonnet: { in: 3, out: 15 },
-  haiku: { in: 1, out: 5 },
-};
-// Antigravity (Gemini) $/MTok, API-equivalent estimates; edit when prices change.
-// Matched by substring of the model name, first hit wins; cache reads at GEMINI_CACHE_READ x input.
-const GEMINI_PRICES = [
-  ["flash-lite", { in: 0.1, out: 0.4 }],
-  ["flash", { in: 0.5, out: 3 }],
-  ["pro", { in: 2, out: 12 }],
-  ["", { in: 0.5, out: 3 }], // unknown model (e.g. trial codenames): priced as flash
-];
-const GEMINI_CACHE_READ = 0.1;
-const CHARS_PER_TOKEN = 3.8;
-const SOFT = Number(process.env.CC_WATCH_SOFT) || 40000;
-
 // ---------- args ----------
 const argv = process.argv.slice(2);
 const arg = (name, def) => {
   const i = argv.indexOf("--" + name);
   return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : def;
 };
+const home = os.homedir();
+const agentsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// ---------- pricing tables (model-prices.json primary, legacy fallback) ----------
+const pricesArg = arg("prices", null);
+const defaultPricesPath = path.join(home, ".agents", "model-prices.json");
+const pricesPath = pricesArg ? path.resolve(pricesArg) : (fs.existsSync(defaultPricesPath) ? defaultPricesPath : null);
+let modelPricesRegistry = null;
+if (pricesPath) {
+  try { modelPricesRegistry = JSON.parse(fs.readFileSync(pricesPath, "utf8")); } catch {}
+}
+
+const LEGACY_PRICES = {
+  opus: { in: 5, out: 25, cacheRead: 0.5 },
+  sonnet: { in: 3, out: 15, cacheRead: 0.3 },
+  haiku: { in: 1, out: 5, cacheRead: 0.1 },
+};
+const LEGACY_GEMINI_PRICES = [
+  ["flash-lite", { in: 0.1, out: 0.4, cacheRead: 0.01 }],
+  ["flash", { in: 0.5, out: 3, cacheRead: 0.05 }],
+  ["pro", { in: 2, out: 12, cacheRead: 0.2 }],
+  ["", { in: 0.5, out: 3, cacheRead: 0.05 }],
+];
+
+function findRates(reg, exactModel, defRates) {
+  const e = reg?.entries?.find((x) => x.model === exactModel);
+  if (e?.rates) {
+    return {
+      in: e.rates.input,
+      out: e.rates.output,
+      cacheRead: e.rates.cachedInput != null ? e.rates.cachedInput : e.rates.input * 0.1,
+    };
+  }
+  return defRates;
+}
+
+const PRICES = modelPricesRegistry ? {
+  opus: findRates(modelPricesRegistry, "claude-opus-5-5", { in: 4, out: 20, cacheRead: 0.2 }),
+  sonnet: findRates(modelPricesRegistry, "claude-sonnet-5-5", { in: 2, out: 10, cacheRead: 0.1 }),
+  haiku: findRates(modelPricesRegistry, "claude-haiku-5-5", { in: 0.1, out: 0.5, cacheRead: 0.01 }),
+} : LEGACY_PRICES;
+
+const argonRates = findRates(modelPricesRegistry, "gemini-4-argon", { in: 2, out: 10, cacheRead: 0.1 });
+const flashRates = findRates(modelPricesRegistry, "gemini-3.8-flash", { in: 0.75, out: 3.75, cacheRead: 0.075 });
+const flashLiteRates = findRates(modelPricesRegistry, "gemini-3.5-flash-lite", { in: 0.3, out: 2.5, cacheRead: 0.03 });
+
+function resolveGemini(model) {
+  const m = String(model || "").toLowerCase();
+  if (modelPricesRegistry) {
+    const exact = modelPricesRegistry.entries?.find((e) => e.model && e.model.toLowerCase() === m);
+    if (exact?.rates) {
+      return [exact.model, {
+        in: exact.rates.input,
+        out: exact.rates.output,
+        cacheRead: exact.rates.cachedInput != null ? exact.rates.cachedInput : exact.rates.input * 0.1,
+      }];
+    }
+    if (m.includes("argon") || m.includes("pro") || m.includes("ultra")) {
+      return ["gemini-4-argon", argonRates];
+    }
+    if (m.includes("flash-lite") || m.includes("3.5-flash")) {
+      return ["gemini-3.5-flash-lite", flashLiteRates];
+    }
+    if (m.includes("flash")) {
+      return ["gemini-3.8-flash", flashRates];
+    }
+    return ["", flashRates];
+  } else {
+    if (m.includes("argon") || m.includes("pro") || m.includes("ultra")) {
+      return ["pro", { in: 2, out: 12, cacheRead: 0.2 }];
+    }
+    if (m.includes("flash-lite")) {
+      return ["flash-lite", { in: 0.1, out: 0.4, cacheRead: 0.01 }];
+    }
+    if (m.includes("flash")) {
+      return ["flash", { in: 0.5, out: 3, cacheRead: 0.05 }];
+    }
+    const hit = LEGACY_GEMINI_PRICES.find(([k]) => m.includes(k));
+    return hit || ["", { in: 0.5, out: 3, cacheRead: 0.05 }];
+  }
+}
+const geminiKey = (model) => resolveGemini(model)[0];
+const geminiPrice = (model) => resolveGemini(model)[1];
+const GEMINI_PRICES = modelPricesRegistry ? [
+  ["gemini-3.5-flash-lite", flashLiteRates],
+  ["gemini-3.8-flash", flashRates],
+  ["gemini-4-argon", argonRates],
+] : LEGACY_GEMINI_PRICES;
+
+const GEMINI_CACHE_READ = 0.1;
+const CHARS_PER_TOKEN = 3.8;
+const SOFT = Number(process.env.CC_WATCH_SOFT) || 40000;
+
 const project = path.resolve(arg("project", process.cwd()));
 const days = Number(arg("days", 30)) || 30;
 const outDir = path.resolve(arg("out", path.join(project, ".agents", "reports")));
@@ -52,9 +127,6 @@ const agBaseline = String(arg("ag-baseline", "pro")).toLowerCase(); // Gemini ba
 let sinceRaw = arg("since", "");
 if (!sinceRaw) { try { sinceRaw = fs.readFileSync(path.join(outDir, "since.txt"), "utf8").trim(); } catch {} }
 const sinceMs = sinceRaw ? Date.parse(sinceRaw) || 0 : 0;
-
-const home = os.homedir();
-const agentsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 // ---------- helpers ----------
 const tok = (chars) => chars / CHARS_PER_TOKEN;
@@ -72,7 +144,7 @@ function family(model) {
   return "opus";
 }
 const P = (model) => PRICES[family(model)];
-const readPrice = (model) => P(model).in * 0.1 / 1e6;
+const readPrice = (model) => P(model).cacheRead / 1e6;
 const writePrice = (model) => P(model).in * 1.25 / 1e6;
 
 function costOf(model, u) {
@@ -86,7 +158,7 @@ function costOf(model, u) {
     const a = w5 || 0, b = w1 || 0;
     write = p.in * (1.25 * (a + Math.max(0, wTotal - a - b)) + 2 * b);
   } else write = p.in * 1.25 * wTotal;
-  return ((u.input_tokens || 0) * p.in + write + (u.cache_read_input_tokens || 0) * p.in * 0.1 +
+  return ((u.input_tokens || 0) * p.in + write + (u.cache_read_input_tokens || 0) * p.cacheRead +
     (u.output_tokens || 0) * p.out) / 1e6;
 }
 const ctxOf = (u) => (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0);
@@ -111,9 +183,13 @@ function resultText(c) {
   return "";
 }
 // Leading whitespace allowed: Claude Code indents every line of a subagent's hand-back in the tool_result.
-function lastGate(text) {
+export function lastGate(text) {
   let last = null;
-  try { for (const m of String(text || "").matchAll(/^[ \t]*GATE:\s*(pass|fail|none)\b/gim)) last = m[1].toLowerCase(); } catch {}
+  try {
+    for (const m of String(text || "").matchAll(/^[ \t>*\x60-]*\*?\*?\x60?GATE\*?\*?\x60?:\*?\*?\s*\x60?\*?\*?(pass|fail|none)\x60?\*?\*?\b/gim)) {
+      last = m[1].toLowerCase();
+    }
+  } catch {}
   return last;
 }
 
@@ -138,7 +214,7 @@ const dirs = safeDir(projectsRoot).filter((d) => d === slug || d.startsWith(slug
   .map((d) => path.join(projectsRoot, d));
 const collectionUntil = Date.now();
 const cutoff = Math.max(collectionUntil - days * 86400000, sinceMs);
-const codex = await readCodexUsage({ project, codexHome: arg("codex-home", undefined), since: cutoff, until: collectionUntil });
+const codex = await readCodexUsage({ project, codexHome: arg("codex-home", undefined), pricesPath, since: cutoff, until: collectionUntil });
 const sessionFiles = [];
 for (const d of dirs) {
   for (const f of safeDir(d)) {
@@ -458,8 +534,6 @@ const ag = {
   spawns: [],
   delegationSavings: 0,
 };
-const geminiKey = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[0]; // matched key ("" = unpriced fallback)
-const geminiPrice = (model) => GEMINI_PRICES.find(([k]) => model.includes(k))[1];
 const normPath = (p) => path.resolve(p).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 const agDir = path.join(home, ".gemini", "antigravity", "conversations");
 const agFiles = safeDir(agDir).filter((f) => f.endsWith(".db"));
@@ -513,7 +587,7 @@ if (agFiles.length) {
           if (!u[2] && !u[3]) continue; // aborted call, no usage
           const model = g[19]?.[0]?.toString() || "unknown";
           const p = geminiPrice(model);
-          const cost = (n(2) * p.in + n(4) * p.in + n(5) * p.in * GEMINI_CACHE_READ + n(3) * p.out) / 1e6;
+          const cost = (n(2) * p.in + n(4) * p.in + n(5) * p.cacheRead + n(3) * p.out) / 1e6;
           const scope = isSub ? "subagent" : "main";
           const key = scope + "|" + model;
           const row = ag.rows.get(key) || { scope, model, req: 0, inp: 0, cw: 0, cr: 0, out: 0, think: 0, cost: 0 };
@@ -542,7 +616,7 @@ if (agFiles.length) {
     // Antigravity kit overhead across main sessions
     for (const s of ag.mainSessions) {
       const p = geminiPrice(s.mainModel);
-      ag.kitCost += tok(ag.kitChars) * (p.in / 1e6 + (p.in * GEMINI_CACHE_READ / 1e6) * Math.max(0, s.turns.length - 1));
+      ag.kitCost += tok(ag.kitChars) * (p.in / 1e6 + (p.cacheRead / 1e6) * Math.max(0, s.turns.length - 1));
     }
 
     // Antigravity delegation savings across subagents
@@ -560,11 +634,11 @@ if (agFiles.length) {
       let carried = 0;
       for (const t of sub.turns) carried += mainCtx + Math.max(0, t.ctx - firstCtx);
 
-      const mainReadPrice = pMain.in * GEMINI_CACHE_READ / 1e6;
+      const mainReadPrice = pMain.cacheRead / 1e6;
       // Spawn position is unknown: assume mid-session (as for mainCtx), so half the parent's turns remain.
       const remaining = parent ? Math.floor(parent.turns.length / 2) : 5;
       const inline = carried * mainReadPrice + (totalOut + G) * (pMain.in / 1e6) + G * mainReadPrice * remaining;
-      const pBase = geminiPrice(agBaseline), baseRead = pBase.in * GEMINI_CACHE_READ / 1e6;
+      const pBase = geminiPrice(agBaseline), baseRead = pBase.cacheRead / 1e6;
       const inlineBase = carried * baseRead + (totalOut + G) * (pBase.in / 1e6) + G * baseRead * remaining;
       ag.spawns.push({
         carried, totalOut, G, remaining, inlineBase,
@@ -598,11 +672,11 @@ if (ag.status === "ok") {
   const pB = geminiPrice(agBaseline), pC = PRICES[baseFam];
   let mainBase = 0, mainAct = 0, mainClaude = 0;
   for (const s of ag.mainSessions) for (const t of s.turns) {
-    mainBase += (t.inp * pB.in + t.cw * pB.in + t.cr * pB.in * GEMINI_CACHE_READ + t.out * pB.out) / 1e6;
-    mainClaude += (t.inp * pC.in + t.cw * pC.in + t.cr * pC.in * 0.1 + t.out * pC.out) / 1e6;
+    mainBase += (t.inp * pB.in + t.cw * pB.in + t.cr * pB.cacheRead + t.out * pB.out) / 1e6;
+    mainClaude += (t.inp * pC.in + t.cw * pC.in + t.cr * pC.cacheRead + t.out * pC.out) / 1e6;
     mainAct += t.cost;
   }
-  const cRead = pC.in * 0.1 / 1e6;
+  const cRead = pC.cacheRead / 1e6;
   const subClaude = ag.spawns.reduce((a, r) => a + r.carried * cRead + (r.totalOut + r.G) * (pC.in / 1e6) + r.G * cRead * r.remaining, 0);
   agS.base = mainBase + ag.spawns.reduce((a, r) => a + r.inlineBase, 0);
   agS.model = mainBase - mainAct; agS.deleg = ag.spawns.reduce((a, r) => a + (r.inlineBase - r.actual), 0);
@@ -654,7 +728,11 @@ L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, so
 
 L.push(`## Codex usage observations`, "", `Coverage: **${codex.coverage}**. ${codex.scope}`, "",
   `Sessions: main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}.`, "",
-  codex.counterSemantics, "Cost and quota savings: unknown.", "",
+  codex.counterSemantics,
+  codex.modeledCostUsd !== null && codex.modeledCostUsd > 0
+    ? `Cost: modeled cost **${usd(codex.modeledCostUsd)}** (${codex.pricedSessions} priced sessions${codex.unpricedSessions ? `, ${codex.unpricedSessions} unpriced` : ""}; quota savings unknown).`
+    : `Cost and quota savings: unknown${codex.unpricedSessions ? ` (${codex.unpricedSessions} unpriced sessions)` : ""}.`,
+  "",
   "| Session | Role | Input | Cached input | Cache write | Output | Reasoning output | Reported total | Coverage |",
   "| :-- | :-- | --: | --: | --: | --: | --: | --: | :-- |");
 const observedValue = n => n === null ? "unknown" : fmt(n);
@@ -855,7 +933,8 @@ try {
       ag.status === "no_matching_usage" ? `no matching usage; costs and delegation unknown${ag.skipped ? ` (${ag.skipped} unreadable DBs skipped; incomplete coverage)` : ""}` :
       ag.status === "none" ? "no source; costs and delegation unknown" : "not readable; costs and delegation unknown";
     const claudeSummary = ccAvailable ? `Claude ${sessions.length} sessions, modeled spend ${usd(totalSpend)}, modeled delegation difference ${usd(delegationSavings)}` : "Claude usage unavailable; costs and delegation unknown";
-    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""}: ${claudeSummary} · Codex ${codex.coverage}, ${codex.sessions.length} sessions (main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}); per-session reported counters in report, overlap unknown, cost unknown · Antigravity ${agSummary} → ${shown}`);
+    const codexCostSummary = (codex.modeledCostUsd !== null && codex.modeledCostUsd > 0) ? `modeled cost ${usd(codex.modeledCostUsd)}` : "cost unknown";
+    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""}: ${claudeSummary} · Codex ${codex.coverage}, ${codex.sessions.length} sessions (main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}); per-session reported counters in report, overlap unknown, ${codexCostSummary} · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
