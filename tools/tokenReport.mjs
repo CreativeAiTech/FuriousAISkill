@@ -2,8 +2,7 @@
 // tokenReport: "is the agent kit worth having?" from Claude Code transcripts.
 // Compares the kit's fixed per-session token overhead with measured savings
 // (subagent delegation) and flags waste (late checkpoints, huge tool results).
-// Costs are API-list-price equivalents; on a subscription, quota roughly
-// tracks cost-weighted tokens.
+// Costs are modeled API-list-price equivalents, not billing or quota.
 //
 // Also reads Antigravity (Gemini) conversations from ~/.gemini/antigravity
 // (SQLite + protobuf, via node:sqlite) into a separate section.
@@ -16,6 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
+import { readCodexUsage } from "./lib/codexUsage.mjs";
 import { pbVarint, pbFields } from "./lib/agStore.mjs";
 
 // API list $/MTok; edit when prices change
@@ -136,7 +136,9 @@ const projectsRoot = path.join(home, ".claude", "projects");
 const slug = project.replace(/[^A-Za-z0-9]/g, "-");
 const dirs = safeDir(projectsRoot).filter((d) => d === slug || d.startsWith(slug + "--claude-worktrees-"))
   .map((d) => path.join(projectsRoot, d));
-const cutoff = Math.max(Date.now() - days * 86400000, sinceMs);
+const collectionUntil = Date.now();
+const cutoff = Math.max(collectionUntil - days * 86400000, sinceMs);
+const codex = await readCodexUsage({ project, codexHome: arg("codex-home", undefined), since: cutoff, until: collectionUntil });
 const sessionFiles = [];
 for (const d of dirs) {
   for (const f of safeDir(d)) {
@@ -266,6 +268,7 @@ function parseSession(s) {
 }
 
 const sessions = sessionFiles.map(parseSession).filter((s) => s.turns.length);
+const ccAvailable = sessions.length > 0;
 
 // ---------- spend by model ----------
 const spendRows = new Map(); // key "main|model" -> {...}
@@ -441,7 +444,7 @@ const pct = (x) => (totalSpend ? (100 * x / totalSpend).toFixed(1) : "0.0") + "%
 //     17 = 1 if subagent
 //   gen_metadata.data (one row per model call): 1.19 = model name, 1.4 = usage stats:
 //     2 input (uncached), 3 output (= 9 thinking + 10 response), 5 cache read, 4 cache write
-// Any read error marks the store unreadable; it never touches the Claude section.
+// Readability alone does not establish scoped usage; failures retain skipped counts.
 const ag = {
   status: "none",
   mainSessions: [],
@@ -576,7 +579,8 @@ if (agFiles.length) {
     }
     ag.delegationSavings = ag.spawns.reduce((a, r) => a + r.savings, 0);
 
-    ag.status = readable || !ag.skipped ? "ok" : "unreadable";
+    ag.status = ag.mainSessions.length || ag.subagents.length ? "ok" :
+      readable || !ag.skipped ? "no_matching_usage" : "unreadable";
   } catch { ag.status = "unreadable"; }
 }
 
@@ -608,30 +612,15 @@ if (ag.status === "ok") {
 const npct = (r) => (r.base > 0 ? (100 * r.net / r.base).toFixed(1) + "%" : "n/a");
 const sRow = (name, r) => `| ${name} | ${usd(r.actual)} | ${usd(r.base)} | ${usd(r.gross)} | ${usd(r.kit)} | ${usd(r.net)} | ${npct(r)} |`;
 const agOk = ag.status === "ok";
-const SV = [`## Savings summary`, "",
-  `Baseline = every request on one default model: Claude \`${baseFam}\`, Antigravity \`${agBaseline}\`. Same tokens repriced; subagent work priced as if done inline in the main session. Effort level (medium/high) is not repriced: it changes token counts, which the transcripts can't replay. API-equivalent $, not subscription charges.`, "",
-  `| Tool | Actual | Baseline | Saved (gross) | Kit overhead | Saved (net) | Net % |`, `| :-- | --: | --: | --: | --: | --: | --: |`,
-  sRow(`Claude Code vs ${baseFam}`, cc)];
-if (agOk) {
-  SV.push(sRow(`Antigravity vs ${agBaseline}`, agS), sRow(`Antigravity vs Claude ${baseFam} (rough: different tokenizers, separate plan)`, agC));
-  SV.push(sRow("**Total (Claude + Antigravity at own baselines)**", { actual: cc.actual + agS.actual, base: cc.base + agS.base, kit: cc.kit + agS.kit, gross: cc.gross + agS.gross, net: cc.net + agS.net }));
-}
-// Top-model tokens kept off: tokens (input + cache write + cache read + output) that did not run on the baseline model.
-const uTok = (u) => (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.output_tokens || 0);
-const tk = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n)));
-let ccOff = spawnRows.reduce((a, r) => a + r.inlineTok, 0), ccOn = 0;
-for (const s of sessions) for (const t of s.turns) { if (family(t.model) === baseFam) ccOn += uTok(t.usage); else ccOff += uTok(t.usage); }
-let agOff = 0, agOn = 0;
-if (agOk) {
-  for (const s of ag.mainSessions) for (const t of s.turns) { const n = t.inp + t.cw + t.cr + t.out; if (t.model.includes(agBaseline)) agOn += n; else agOff += n; }
-  agOff += ag.spawns.reduce((a, r) => a + r.carried + r.totalOut + r.G + r.G * r.remaining, 0);
-}
-// Limit stretch: quota tracks cost-weighted tokens, so (baseline without kit) / actual = how much more work fits before a reset.
+const SV = [`## Modeled price comparison`, "",
+  "Counterfactual estimates using the configured historical API list prices; these do not measure billing, quota duration, or realized savings. Same tokens repriced, with subagent work modeled inline. Effort changes cannot be replayed.", "",
+  `| Tool | Modeled actual | Baseline | Difference (gross) | Kit overhead | Difference (net) | Net % |`, `| :-- | --: | --: | --: | --: | --: | --: |`];
+if (ccAvailable) SV.push(sRow(`Claude Code vs ${baseFam}`, cc));
+else SV.push("Claude Code usage unavailable for this window; modeled cost and delegation conclusions unavailable.");
+if (agOk) SV.push(sRow(`Antigravity vs ${agBaseline}`, agS), sRow(`Antigravity vs Claude ${baseFam} (rough tokenizer comparison)`, agC));
+SV.push("");
+// Legacy CSV stretch columns retain their positions and store modeled price ratios only.
 const stretch = (r) => (r.actual > 0 ? (r.base - r.kit) / r.actual : 0);
-const lim = (name, r) => `${name} **${stretch(r).toFixed(2)}x** (a 5-hour window lasts ≈${(5 * stretch(r)).toFixed(1)} h of baseline-model work)`;
-SV.splice(2, 0, `**Limit stretch** vs running everything on the baseline: ${lim("Claude Code", cc)}${agOk && ag.cost > 0 ? `; ${lim("Antigravity", agS)}` : ""}. Same for weekly limits.`, "",
-  `**Top-model tokens kept off**: Claude Code ≈${tk(ccOff)} tokens (${baseFam} processed ${tk(ccOn)} itself)${agOk ? `; Antigravity ≈${tk(agOff)} (${agBaseline} processed ${tk(agOn)})` : ""}. Tokens are not comparable across models in $; this shows how much load the expensive model was spared.`, "");
-SV.push("", `Where it came from: model choice ${usd(cc.model)} (Claude)${agOk ? ` / ${usd(agS.model)} (Antigravity)` : ""}; delegation ${usd(cc.deleg)}${agOk ? ` / ${usd(agS.deleg)}` : ""}.`, "");
 
 // ---------- peak windows (Claude Code only: Antigravity turns carry no timestamps) ----------
 function peakWindow(ms) {
@@ -650,29 +639,41 @@ const utc = (t) => new Date(t).toISOString().slice(0, 16).replace("T", " ");
 const PK = [`## Peak windows`, ""];
 if (!pk5) PK.push(`No timestamped Claude Code turns in this window.`, "");
 else {
-  PK.push(`| Window | Start (UTC) | Requests | Actual | All on ${baseFam} | Stretch |`, `| :-- | :-- | --: | --: | --: | --: |`);
+  PK.push(`| Window | Start (UTC) | Requests | Actual | All on ${baseFam} | Modeled price ratio |`, `| :-- | :-- | --: | --: | --: | --: |`);
   for (const [n, p] of [["Busiest 5 hours", pk5], ["Busiest 7 days", pk7]]) PK.push(`| ${n} | ${utc(p.start)} | ${fmt(p.n)} | ${usd(p.actual)} | ${usd(p.base)} | ${p.actual > 0 ? (p.base / p.actual).toFixed(2) : "n/a"}x |`);
-  PK.push("", `Claude Code only (main + subagent turns); Antigravity: no per-call timestamps. Absolute plan limits aren't published, so compare peaks over time: a falling peak for the same work means more headroom.`, "");
+  PK.push("", `Claude Code only (main + subagent turns); Antigravity: no per-call timestamps. Prices are modeled estimates; ratios do not predict subscription quota.`, "");
 }
 
 const today = new Date().toISOString().slice(0, 10);
 const L = [];
 L.push(`# Token report`, "");
 L.push(`- Project: \`${project}\``);
-L.push(`- Window: ${sinceMs > Date.now() - days * 86400000 ? `since ${sinceRaw}` : `last ${days} days`}, ${sessions.length} sessions with usage (${sessionFiles.length} transcript files)`);
+L.push(`- Claude Code window: ${sinceMs > Date.now() - days * 86400000 ? `since ${sinceRaw}` : `last ${days} days`}, ${sessions.length} sessions with usage (${sessionFiles.length} transcript files)`);
 L.push(`- Generated: ${today}`);
-L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, sonnet ${PRICES.sonnet.in}/${PRICES.sonnet.out}, haiku ${PRICES.haiku.in}/${PRICES.haiku.out}); cache write 1.25x (5m) or 2x (1h), cache read 0.1x. These are API-equivalent costs, not what a subscription charges; quota roughly tracks cost-weighted tokens.`, "");
+L.push(`- Prices: API list $/MTok (opus ${PRICES.opus.in}/${PRICES.opus.out}, sonnet ${PRICES.sonnet.in}/${PRICES.sonnet.out}, haiku ${PRICES.haiku.in}/${PRICES.haiku.out}); cache write 1.25x (5m) or 2x (1h), cache read 0.1x. These are modeled estimates from configured historical API prices, not subscription billing or quota.`, "");
 
+L.push(`## Codex usage observations`, "", `Coverage: **${codex.coverage}**. ${codex.scope}`, "",
+  `Sessions: main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}.`, "",
+  codex.counterSemantics, "Cost and quota savings: unknown.", "",
+  "| Session | Role | Input | Cached input | Cache write | Output | Reasoning output | Reported total | Coverage |",
+  "| :-- | :-- | --: | --: | --: | --: | --: | --: | :-- |");
+const observedValue = n => n === null ? "unknown" : fmt(n);
+for (const c of codex.sessions) L.push(`| ${c.id} | ${c.role} | ${["input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens", "reasoning_output_tokens", "total_tokens"].map(k => observedValue(c.observed[k])).join(" | ")} | ${c.coverage}${c.reasons.length ? ": " + c.reasons.join(", ") : ""} |`);
+L.push("", `Diagnostics: ${JSON.stringify(codex.diagnostics)}`, "", `Details: codex-usage.json.`, "");
 L.push(...SV);
 L.push(...PK);
+if (ccAvailable) {
 L.push(`## Spend by model`, "", `| Scope | Model | Requests | Input | Cache write | Cache read | Output | $ |`, `| :-- | :-- | --: | --: | --: | --: | --: | --: |`);
 for (const r of [...spendRows.values()].sort((a, b) => a.scope.localeCompare(b.scope) || b.cost - a.cost))
   L.push(`| ${r.scope} | ${r.model} | ${fmt(r.req)} | ${fmt(r.inp)} | ${fmt(r.cw)} | ${fmt(r.cr)} | ${fmt(r.out)} | ${usd(r.cost)} |`);
 L.push(`| **total** | | | | | | | **${usd(totalSpend)}** |`, "");
 
+}
+
 L.push(`## Antigravity (Gemini)`, "");
 if (ag.status === "none") L.push(`No Antigravity conversations found in \`~/.gemini/antigravity/conversations\`.`, "");
 else if (ag.status === "unreadable") L.push(`**Antigravity: usage not readable (format unknown).** The kit's protobuf field map no longer matches; re-verify it in tokenReport.mjs.`, "");
+else if (ag.status === "no_matching_usage") L.push(`**Antigravity: no matching usage observed for this project/window.** Cost, overhead and delegation conclusions are unavailable.${ag.skipped ? ` ${ag.skipped} unreadable DBs skipped; coverage is incomplete.` : ""}`, "");
 else {
   const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
   const thinkPct = (th, o) => (o > 0 ? (100 * th / o).toFixed(0) + "%" : "n/a");
@@ -708,6 +709,7 @@ else {
   }
 }
 
+if (ccAvailable) {
 L.push(`## Kit overhead`, "", `Fixed text the kit adds to every session. Cost per session = tokens x (cache write once + cache read x main turns), at the session's main model.`, "",
   `| Item | Scope | Chars | ≈Tokens |`, `| :-- | :-- | --: | --: |`);
 for (const [n, c] of globalItems) L.push(`| ${n} | kit-global | ${fmt(c)} | ${fmt(tok(c))} |`);
@@ -719,7 +721,7 @@ L.push("", `| Total over window | $ | % of spend |`, `| :-- | --: | --: |`,
 
 L.push(`## Delegation`, "");
 if (!totalSpawns) {
-  L.push(`**No subagents spawned in ${sessions.length} sessions: delegation rules add overhead but saved nothing yet.**`, "");
+  L.push(`No Claude Code spawns observed in ${sessions.length} Claude sessions. This does not describe Codex activity or establish delegation savings.`, "");
 } else {
   const by = {};
   for (const r of spawnRows) { const k = r.type + " / " + r.model; by[k] = by[k] || { n: 0, a: 0, i: 0 }; by[k].n++; by[k].a += r.actual; by[k].i += r.inline; }
@@ -763,6 +765,8 @@ L.push(`| **total** | | | | | **${usd(totalWaste)}** |`, "", `**Top 10 largest t
 for (const r of top10) L.push(`| ${r.session} | ${r.tool} | ${r.hint.replace(/\|/g, "\\|")} | ${fmt(r.chars)} | ${usd(r.cost)} |`);
 L.push("");
 
+}
+
 let agSamePct = null;
 if (ag.status === "ok") {
   const rows0 = [...ag.rows.values()];
@@ -772,7 +776,7 @@ if (ag.status === "ok") {
 }
 const hp = path.join(outDir, "history.csv");
 const TREND_COLS = ["stretch_cc", "stretch_ag", "ag_same_tier_pct", "peak5h_usd"];
-const trendNow = { stretch_cc: stretch(cc).toFixed(2), stretch_ag: agOk && ag.cost > 0 ? stretch(agS).toFixed(2) : "", ag_same_tier_pct: agSamePct == null ? "" : String(agSamePct), peak5h_usd: pk5 ? pk5.actual.toFixed(2) : "" };
+const trendNow = { stretch_cc: ccAvailable && cc.actual > 0 ? stretch(cc).toFixed(2) : "", stretch_ag: agOk && ag.cost > 0 ? stretch(agS).toFixed(2) : "", ag_same_tier_pct: agSamePct == null ? "" : String(agSamePct), peak5h_usd: pk5 ? pk5.actual.toFixed(2) : "" };
 let trendLine = null;
 {
   const oldCsv = safeRead(hp);
@@ -783,8 +787,8 @@ let trendLine = null;
     const prev = prior.length ? prior[prior.length - 1] : rows[rows.length - 1];
     const get = (c) => { const i = cols.indexOf(c); return i >= 0 ? (prev[i] || "") : ""; };
     const parts = [];
-    if (get("stretch_cc") && trendNow.stretch_cc) parts.push(`Claude stretch ${get("stretch_cc")}x → ${trendNow.stretch_cc}x`);
-    if (get("stretch_ag") && trendNow.stretch_ag) parts.push(`Antigravity stretch ${get("stretch_ag")}x → ${trendNow.stretch_ag}x`);
+    if (get("stretch_cc") && trendNow.stretch_cc) parts.push(`Claude modeled price ratio ${get("stretch_cc")}x → ${trendNow.stretch_cc}x`);
+    if (get("stretch_ag") && trendNow.stretch_ag) parts.push(`Antigravity modeled price ratio ${get("stretch_ag")}x → ${trendNow.stretch_ag}x`);
     if (get("ag_same_tier_pct") && trendNow.ag_same_tier_pct) parts.push(`Antigravity same-tier subagents ${get("ag_same_tier_pct")}% → ${trendNow.ag_same_tier_pct}%`);
     if (get("peak5h_usd") && trendNow.peak5h_usd) parts.push(`peak 5h $${get("peak5h_usd")} → $${trendNow.peak5h_usd}`);
     trendLine = parts.length ? `Trend vs ${prev[0]}: ${parts.join("; ")}.` : "Trend: first run with trend columns, compare next time.";
@@ -792,22 +796,17 @@ let trendLine = null;
 }
 L.push(`## Verdict`, "");
 if (trendLine) L.push(`- ${trendLine}`);
-L.push(
-  `- Claude Code kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} spend); delegation savings: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
+if (ccAvailable) L.push(
+  `- Claude Code modeled kit overhead: **${usd(kitCost)}** (${pct(kitCost)} of ${usd(totalSpend)} modeled spend); modeled delegation difference: **${usd(delegationSavings)}** over ${spawnRows.length} spawns.` +
   ` Savings / overhead ratio: ${kitCost > 0 ? (delegationSavings / kitCost).toFixed(2) : "n/a"}.`);
-L.push(`- Net saved vs ${baseFam}: **${usd(cc.net)}** (${npct(cc)} of baseline).`);
+if (ccAvailable) L.push(`- Modeled net difference vs ${baseFam}: **${usd(cc.net)}** (${npct(cc)} of baseline).`);
 if (ag.status === "ok") {
   const agPct = (x) => (ag.cost ? (100 * x / ag.cost).toFixed(1) : "0.0") + "%";
   L.push(`- Antigravity kit overhead: **${usd(ag.kitCost)}** (${agPct(ag.kitCost)} of ${usd(ag.cost)} spend); delegation savings: **${usd(ag.delegationSavings)}** over ${ag.spawns.length} subagent runs.`);
 }
 L.push("");
 const rec = [];
-if (!totalSpawns) rec.push(`Delegation isn't happening: either enforce it or drop the orchestration rules (§1) to save ≈${fmt(tok(blockChars))} tokens/session.`);
-else if (wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} of ${spawnRows.length} spawns (${Math.round(100 * wasteful.length / spawnRows.length)}%) cost more than inline: raise the "trivial" threshold so small tasks stay inline.`);
-{
-  const mx = spawnRows.filter((r) => r.model === "opus" && r.effort === "max");
-  if (mx.length) rec.push(`${mx.length} Opus escalation(s) ran at max (${usd(mx.reduce((a, r) => a + r.actual, 0))}): check each against model-orchestrator "High vs max" (default is high).`);
-}
+if (spawnRows.length && wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} of ${spawnRows.length} observed Claude spawns (${Math.round(100 * wasteful.length / spawnRows.length)}%) cost more than modeled inline: consider keeping small tasks inline.`);
 if (totalWaste > kitCost && totalWaste > 0) rec.push(`Late-checkpoint waste (${usd(totalWaste)}) exceeds kit overhead (${usd(kitCost)}): checkpoint earlier (lower CC_WATCH_SOFT/HARD).`);
 if (top10.length && top10[0].chars > 20000) rec.push(`Bounded reads are being skipped: largest tool result is ${fmt(top10[0].chars)} chars (${top10[0].tool}: ${top10[0].hint || "n/a"}).`);
 if (totalSpend && kitCost / totalSpend > 0.05) rec.push(`Kit overhead is ${pct(kitCost)} of spend (> 5%): trim rules/descriptions.`);
@@ -826,9 +825,9 @@ if (ag.status === "ok") {
 }
 {
   const mainOn = [...spendRows.values()].filter((r) => r.scope === "main" && family(r.model) === baseFam).reduce((a, r) => a + r.cost, 0);
-  if (mainActual > 0 && stretch(cc) < 1.10 && mainOn / mainActual > 0.9) rec.push(`Claude Code: ${Math.round(100 * mainOn / mainActual)}% of main-session spend is on ${baseFam}, limit stretch only ${stretch(cc).toFixed(2)}x: delegate collect/verify to haiku and spec'd edits to sonnet.`);
+  if (mainActual > 0 && stretch(cc) < 1.10 && mainOn / mainActual > 0.9) rec.push(`Claude Code: ${Math.round(100 * mainOn / mainActual)}% of main-session spend is on ${baseFam}, modeled price ratio ${stretch(cc).toFixed(2)}x: delegate collect/verify to haiku and spec'd edits to sonnet.`);
 }
-if (!rec.length) rec.push("No rule triggered; the kit looks healthy for this window.");
+if (!rec.length) rec.push("No supported recommendation from the available telemetry; observed counters alone do not establish kit effectiveness.");
 for (const r of rec) L.push(`- ${r}`);
 L.push("");
 
@@ -839,19 +838,24 @@ try {
   if (!fs.existsSync(gi)) fs.writeFileSync(gi, "*\n");
   const reportPath = path.join(outDir, "token-report.md");
   fs.writeFileSync(reportPath, L.join("\n"));
+  fs.writeFileSync(path.join(outDir, "codex-usage.json"), JSON.stringify(codex, null, 2) + "\n");
   let kitVersion = "";
   try { kitVersion = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "VERSION"), "utf8").trim(); } catch {}
   const header = "date,days,sessions,spend_usd,kit_overhead_usd,delegation_savings_usd,checkpoint_waste_usd,spawns,wasteful_spawns,antigravity_usd,baseline_usd,saved_net_usd," + TREND_COLS.join(",") + ",kit_version\n";
   const agUsd = ag.status === "ok" ? ag.cost.toFixed(2) : "";
-  const row = [today, days, sessions.length, totalSpend.toFixed(2), kitCost.toFixed(2), delegationSavings.toFixed(2), totalWaste.toFixed(2), spawnRows.length, wasteful.length, agUsd, cc.base.toFixed(2), cc.net.toFixed(2), ...TREND_COLS.map((c) => trendNow[c]), kitVersion].join(",") + "\n";
+  const ccNumber = n => ccAvailable ? n.toFixed(2) : "";
+  const row = [today, days, ccAvailable ? sessions.length : "", ccNumber(totalSpend), ccNumber(kitCost), ccNumber(delegationSavings), ccNumber(totalWaste), ccAvailable ? spawnRows.length : "", ccAvailable ? wasteful.length : "", agUsd, ccNumber(cc.base), ccNumber(cc.net), ...TREND_COLS.map((c) => trendNow[c]), kitVersion].join(",") + "\n";
   const old = safeRead(hp);
   if (old && !old.startsWith(header)) fs.writeFileSync(hp, header + old.slice(old.indexOf("\n") + 1)); // upgrade header; old rows leave the new column blank
   fs.appendFileSync(hp, (old ? "" : header) + row);
   if (wantSummary) {
     const rel = path.relative(project, reportPath);
     const shown = rel.startsWith("..") ? reportPath : rel.replace(/\\/g, "/");
-    const agSummary = ag.status === "ok" ? `${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; overhead ${usd(ag.kitCost)}, saved ${usd(ag.delegationSavings)})` : ag.status === "none" ? "none" : "not readable";
-    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""} (${sinceMs > Date.now() - days * 86400000 ? "since " + sinceRaw.slice(0, 10) : days + "d"}, ${sessions.length} sessions): spend ${usd(totalSpend)} · kit overhead ${usd(kitCost)} (${pct(kitCost)}) · delegation saved ${usd(delegationSavings)} (${spawnRows.length} spawns)${routingTiers.length ? " · routing " + routingTiers.map((k) => `${k} ${routing[k].pass}/${routing[k].n}${routing[k].falsePass ? ", " + routing[k].falsePass + " false pass" : ""}`).join(", ") : ""} · late-checkpoint waste ${usd(totalWaste)} · saved vs ${baseFam} ${usd(cc.net)} net (${npct(cc)}) · Antigravity ${agSummary} → ${shown}`);
+    const agSummary = ag.status === "ok" ? `modeled spend ${usd(ag.cost)} (${ag.mainSessions.length} main, ${ag.subagents.length} sub; modeled overhead ${usd(ag.kitCost)}, modeled delegation difference ${usd(ag.delegationSavings)})` :
+      ag.status === "no_matching_usage" ? `no matching usage; costs and delegation unknown${ag.skipped ? ` (${ag.skipped} unreadable DBs skipped; incomplete coverage)` : ""}` :
+      ag.status === "none" ? "no source; costs and delegation unknown" : "not readable; costs and delegation unknown";
+    const claudeSummary = ccAvailable ? `Claude ${sessions.length} sessions, modeled spend ${usd(totalSpend)}, modeled delegation difference ${usd(delegationSavings)}` : "Claude usage unavailable; costs and delegation unknown";
+    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""}: ${claudeSummary} · Codex ${codex.coverage}, ${codex.sessions.length} sessions (main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}); per-session reported counters in report, overlap unknown, cost unknown · Antigravity ${agSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);

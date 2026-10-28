@@ -14,7 +14,7 @@ used daily on a real game project.
 - **Task board** (`task-board` skill, `tools/baton.mjs`, experimental, opt-in): tickets with claims and leases, a handoff
   "baton" each session writes before it stops, and a brief the next agent reads first. `git push` is the lock.
 - **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
-- **Token report** (`tools/tokenReport.mjs`): where your tokens went, and how much delegation actually saved.
+- **Token report** (`tools/tokenReport.mjs`): observed usage, telemetry coverage, and modeled price comparisons.
 
 `sync.mjs` maintains the supported Claude Code (`~/.claude`) and Antigravity (`~/.gemini`) copies. Codex discovers canonical skills directly in `~/.agents/skills` and project `.agents/skills`; no additional Codex copy is needed.
 Status: personal kit, shared as-is. MIT licensed, issues welcome.
@@ -70,14 +70,18 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from context-watch, report at `.agents/reports/context-hygiene.md` |
 | `hooks/rule-lint.mjs` + `tools/lib/ruleLint.mjs` | Write-time rule lint (Claude Code): after an edit to CLAUDE.md, AGENTS.md, GEMINI.md or `.agents/rules/**`, one warning line for a big file with no "Before you" table, a topic file without `Keywords:`, a line duplicated in another always-on file, or a missing trigger-table path; never blocks |
 | `tools/modelTier.mjs` + `tools/modelAuthority.mjs` + `hooks/model-check.mjs` | Model fallback gate (opt-in: `"modelGate": true` in `.agents/baton.config.json`): a non-top main model is stopped once and must ask the user (`baton.mjs --model <id> --effort <effort>` for tools without hooks); ranks in `model-ranks.json`, an unranked model asks "top, mid or small?" and `modelTier.mjs learn` records the coarse rank. Brain authority separately requires current exact model/effort evidence at >=90% of the benchmark leader; learning top alone cannot grant it |
-| `tools/tokenReport.mjs` | Token report: kit overhead vs measured delegation savings, context hygiene, verdict (see below) |
+| `tools/tokenReport.mjs` | Token report: observed usage, modeled overhead/delegation comparisons and context hygiene (see below) |
 | `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |
 
 Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It lives in `hooks/context-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
 
 ## Token report
 
-`node ~/.agents/tools/tokenReport.mjs [--project <dir>] [--days 30] [--out <dir>] [--summary]` reads Claude Code transcripts and answers whether the kit pays for itself: its fixed per-session overhead versus measured subagent savings, late-checkpoint waste, and the largest tool results, ending with a verdict. Costs are API-list-price equivalents (edit `PRICES` at the top when prices change). Output goes to `<project>/.agents/reports/` (`token-report.md`, `history.csv`, self-ignoring `.gitignore`). The context-watch hook refreshes it at session start once a day (first session of the day) and shows the one-line summary.
+`node ~/.agents/tools/tokenReport.mjs [--project <dir>] [--days 30] [--since <ISO date>] [--codex-home <dir>] [--out <dir>] [--summary]` reads Claude Code, Antigravity and Codex usage. Claude/Antigravity price comparisons are counterfactual estimates using configured historical API prices; they do not measure billing, realized savings or subscription quota duration. Missing Claude telemetry or no matching Antigravity usage for the project/window produces unavailable conclusions and blank numeric CSV cells. Readable Antigravity storage alone does not establish usage; skipped unreadable databases retain incomplete-coverage diagnostics.
+
+Codex reads JSONL below `<codex-home>/sessions` (default `CODEX_HOME` or `~/.codex`) without modifying source files. It matches normalized exact `session_meta.cwd`; child directories and worktrees are not implicitly included. Event timestamps define the window; the last earlier cumulative snapshot is the baseline. A first snapshot is counted only when an in-window origin is established; missing history, counter decreases, ambiguous ordering and invalid records are flagged. Model/effort transitions are preserved without allocating uncertain increments to a model. Main, worker, guardian and unknown roles are counted separately. Per-session reported counters have unknown parent/worker overlap, so no unique task-wide total, Codex cost or quota savings is reported. `observed` describes available counters, not complete task coverage. Message/tool contents are excluded from Codex output.
+
+Output goes to `<project>/.agents/reports/` (`token-report.md`, separate `codex-usage.json`, `history.csv`, self-ignoring `.gitignore`). Legacy CSV columns retain their positions; `stretch_cc`/`stretch_ag` now denote modeled price ratios only. The context-watch hook refreshes the report at session start once a day and shows the coverage-aware summary.
 
 Copies on claude.ai (Settings, Capabilities, Skills) can't be synced from here. Re-upload `skills/<name>` after you edit it.
 
