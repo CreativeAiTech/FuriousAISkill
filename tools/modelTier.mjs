@@ -92,6 +92,66 @@ export function fallbackWarning(model, root, effort) {
   );
 }
 
+
+/**
+ * Non-blocking advisory when a session runs on an over-priced / luxury model or effort tier relative to optimal brains.
+ * Returns "" when no nudge applies.
+ */
+export function valueAdvisory(model, effort) {
+  if (!model || typeof model !== "string") return "";
+  const m = model.trim().toLowerCase();
+  const e = typeof effort === "string" ? effort.trim().toLowerCase() : "";
+  if (m === "gpt-6-astra") {
+    if (e === "max") {
+      return (
+        "💡 VALUE NOTICE: You are on `gpt-6-astra` (`max`, 91.38% relative power). This provides **+1.9% more benchmark power** (+1.72 pts) " +
+        "than `gpt-6.1-sol` (`max`, 89.66%) at **5× the token price ($10/$50 vs $2/$10, ~2.55×–5× Codex credit burn)**. " +
+        "For implementation or standard tasks, consider opening a new chat with `gpt-6.1-sol` (`high` or `xhigh`), or stay here only for a top-tier ruling."
+      );
+    }
+    if (e === "xhigh") {
+      return (
+        "💡 VALUE NOTICE: You are on `gpt-6-astra` (`xhigh`, 89.66% relative power). This provides **+0.0% more power** than `gpt-6.1-sol` (`max`, 89.66%) " +
+        "and **+2.0% more** than `gpt-6.1-sol` (`xhigh`, 87.93%) at **5× the token price ($10/$50 vs $2/$10)**. " +
+        "Recommend opening a new chat with `gpt-6.1-sol` (`xhigh` or `high`)."
+      );
+    }
+    if (e === "high") {
+      return (
+        "💡 VALUE NOTICE: You are on `gpt-6-astra` (`high`, 87.93% relative power). This provides **+0.0% more power** than `gpt-6.1-sol` (`xhigh`, 87.93%) " +
+        "at **5× the token price ($10/$50 vs $2/$10)**. Recommend opening a new chat with `gpt-6.1-sol` (`high` for daily work, `xhigh` for deep reasoning)."
+      );
+    }
+    return (
+      "💡 VALUE NOTICE: You are on `gpt-6-astra` ($10/$50 per 1M tokens, **5× the base rate** of `gpt-6.1-sol` at $2/$10 for **0%–1.9% score delta**). " +
+      "Unless this session requires a top-tier tie-breaker at `max`, open a new chat with `gpt-6.1-sol` (`high` or `xhigh`)."
+    );
+  }
+  if (/fable/i.test(m)) {
+    return (
+      `💡 VALUE NOTICE: You are on \`${model}\` (91.38% max relative power, $10/$50 per 1M tokens). This provides **−1.8% to −8.6% less benchmark score** ` +
+      "than `claude-opus-5-5` (`high` 93.10%, `max` 100.00% at $4/$20) at **2.5× the cost**, and costs **5× more** than `claude-sonnet-5-5` (`max` 96.55% at $2/$10). " +
+      "Recommend opening a new chat with `claude-opus-5-5` (`medium`/`high`) or `claude-sonnet-5-5`."
+    );
+  }
+  if (/opus/i.test(m) && (e === "max" || e === "xhigh")) {
+    const score = e === "max" ? "100.00%" : "96.55%";
+    const gain = e === "max" ? "+7.4%" : "+3.7%";
+    return (
+      `💡 VALUE NOTICE: You are on \`${model}\` (\`${e}\`, ${score} relative power). \`${e}\` provides **${gain} more benchmark power** than \`claude-opus-5-5\` (\`high\`, 93.10%) ` +
+      "while burning **~2×–3× more thinking output tokens** ($20/1M), and costs **2× the base rate** of `claude-sonnet-5-5` (`max` 96.55% at $2/$10). " +
+      "For routine implementation, consider `claude-opus-5-5` (`medium`/`high`) or `claude-sonnet-5-5`."
+    );
+  }
+  if ((/argon/i.test(m) || /gemini[\w.\s-]*\bpro\b/i.test(m)) && e === "high") {
+    return (
+      `💡 VALUE NOTICE: You are on \`${model}\` (\`high\`, 91.38% relative power, $2/$10 intro rate). \`high\` burns **~2× more thinking tokens** than API-default \`medium\` ` +
+      "and costs **2.67× the base rate** of `gemini-3.8-flash` ($0.75/$3.75). Reserve `high` for top-tier architecture/rulings; use `medium` or `gemini-3.8-flash` for routine work."
+    );
+  }
+  return "";
+}
+
 // QUOTA.md keeps one row per tool: | tool | model | tier | seen | source |. Rewritten only when model or tier changes.
 const HEADER = [
   "# Model availability (auto-written by ~/.agents/tools/modelTier.mjs)",

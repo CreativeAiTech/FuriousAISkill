@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Route work among available coding agents and model tiers, delegate bounded subtasks, review results, and preserve cross-tool handoffs. Use for agent/model choice, delegation, quota or token planning, and switching tools mid-project.
 metadata:
-  version: 1.3.0
+  version: 1.4.0
 ---
 
 # Model Orchestrator
@@ -15,28 +15,30 @@ For research-to-experiment triage or an explicit efficiency experiment, read [re
 
 Read project entrypoints (AGENTS.md / CLAUDE.md / GEMINI.md) and use their task board, ownership, model gate, art pipeline, and verification commands. A direct user request takes precedence. Existing authorization carries forward; do not invent a new approval gate.
 
-Use the **actual running model**, not the product name, to establish its tier. A project rank table overrides the kit table; an unknown model is not automatically a brain. A model is a brain only when its exact model/effort configuration passes the benchmark gate in [references/model-authority.md](references/model-authority.md). Read that reference before ranking, architecture, final review, or publishing. A coarse top rank alone is insufficient. Preserve assigned tickets and active claims when choosing who works next.
+Use the **actual running model**, not the product name, to establish its tier. A project rank table overrides the kit table; an unknown model is not automatically a brain. A model may exercise judgment when its exact model/effort configuration passes the benchmark gate or has an applicable reviewed project/task/configuration/risk qualification in [references/model-authority.md](references/model-authority.md). Read that reference before ranking, architecture, final review, or publishing. A coarse top rank alone is insufficient. Preserve assigned tickets and active claims when choosing who works next.
 
 ## Step 1: Pick the agent
 
 | Agent | Use it for | Limits |
 | :--- | :--- | :--- |
-| **Gemini / Antigravity** `@gemini` | Routine edits, content, pipeline runs; default image work where the project uses Gemini | Top-tier decisions require an actually top-ranked model |
+| **Gemini / Antigravity** `@gemini` | Routine edits, content, pipeline runs; default image work where the project uses Gemini | Judgment requires applicable benchmark or task qualification |
 | **Claude Code** `@claude` | Architecture, hard bugs, refactors, implementation and review | Tier follows the actual model; use its available tools |
-| **Codex** `@codex` | Architecture, hard bugs, refactors, implementation and review | Peer brain only on a top-ranked model; tool access and effort controls vary by session |
-| **xAI Grok** `@grok` | Proposals, implementation or second opinions when suitable tools exist | Current scored configurations are below the brain gate; access and cost depend on the connector |
+| **Codex** `@codex` | Architecture, hard bugs, refactors, implementation and review | Judgment requires benchmark eligibility or an applicable task qualification; tool access and effort controls vary by session |
+| **xAI Grok** `@grok` | Proposals, implementation or second opinions when suitable tools exist | Historical scored configurations are below the benchmark gate; task qualification, access and cost must be checked |
 | **User** `@user` | Secrets, account actions, taste and decisions reserved for the user | Do agent-executable work before asking for a concrete final approval |
 
-Choose the active capable top-ranked brain for judgment, respecting project ownership and available quota. Do not route every decision to Claude merely because an older table names it. Use measured availability/cost where known; do not assume a fixed scarcity order across providers.
+For price, effort or task-category selection, read [model-economics.md](references/model-economics.md); for supported versus measured effort settings, read [model-efforts.md](references/model-efforts.md). Prefer the least costly qualified route meeting the task quality/risk and latency requirements, measured as accepted outcomes per total workflow dollar. General benchmark points do not measure UI/UX or creative quality.
+
+Choose the active capable benchmark- or task-qualified brain for judgment, respecting project ownership and available quota. Do not route every decision to Claude merely because an older table names it. Use measured availability/cost where known; do not assume a fixed scarcity order across providers.
 
 | Task | Route |
 | :--- | :--- |
 | Project pet art or pipeline stages | Keep the project's image route (normally `@gemini`); native Codex image generation is a capability, not permission to replace that route |
-| Architecture, unknown-cause bug, risky-diff review, feature specifications | Available top-ranked brain at the required effort |
-| Implementation in a top-tier area | Execute the written decision with a suitable worker; top-ranked brain reviews |
+| Architecture, unknown-cause bug, risky-diff review, feature specifications | Available benchmark- or applicable task-qualified brain with required risk checks |
+| Implementation in a top-tier area | Execute the written decision with a suitable worker; an applicable qualified brain reviews |
 | Routine code, docs, content, checks | Cheapest capable available worker; inline when delegation overhead outweighs its benefit |
-| Barks, taunts, names, divergent brainstorming | Grok `auto` if connected and within budget; active agent curates |
-| Formula sanity check or outside code critique | Grok as a second opinion; top-ranked brain decides |
+| Barks, taunts, names, divergent brainstorming | Compare capable creative candidates against the brief and cost; Grok `auto` is an option if connected and within budget; active agent curates |
+| Formula sanity check or outside code critique | Useful independent second opinion within budget; an applicable qualified brain decides |
 | Taste, secrets or account action | User, only for the part that needs them |
 
 Whichever agent is active executes `@grok` items and records the result. If Grok is unavailable, finish natively where possible. Do not spend an external call on a question already answerable from the repo.
@@ -68,7 +70,7 @@ Use the currently exposed native model list and the rank table; a rank is a proj
 | Inventory, extraction, simple checks | `gpt-6-luna` (small) | low for mechanical work; high for a harder scan |
 | Implementation from a decided spec | `gpt-6.1-sol` (mid); `gpt-6-sol` when explicitly available | medium |
 | Bounded visual/computer-use work | `gpt-6.1-terra` (mid), with the required tools exposed | medium |
-| Top-tier ruling or demanding independent review | Exact eligible model/effort from the benchmark registry | Lowest measured effort that passes; Astra currently requires max |
+| Top-tier ruling or demanding independent review | Exact benchmark- or applicable task-qualified model/effort | Lowest qualifying supported effort; high risk retains high+ and independent current-result checks |
 
 Pass both model and supported effort explicitly so helpers do not inherit an expensive main setting by accident. If the spawn API requires fresh context for overrides, use that mode and supply a self-contained spec. Effort changes brain eligibility; never transfer a score between efforts. A lower-tier native worker may execute the brain's decided spec and return its result; the parent retains judgment, verification and closure. Standalone fallback-session restrictions still apply. Do not switch the main model or rewrite global configuration to achieve this.
 
@@ -80,15 +82,15 @@ Pass both model and supported effort explicitly so helpers do not inherit an exp
 | Mid | Features and refactors inside a module; implementation from a design |
 | Top | Architecture, difficult debugging, high-risk judgment, final review |
 
-Use the rank table, actual model ID and actual effort. Before a brain decision, run `node <kit>/tools/modelAuthority.mjs <model-id> --effort <actual-effort>` with the applicable rank table. Exit 0 establishes benchmark eligibility, not task correctness or publish permission. A wrong result twice needs a better model, better specification, or missing information, rather than another identical retry.
+Use the rank table, actual model ID and actual effort. Before a brain decision, run `node <kit>/tools/modelAuthority.mjs <model-id> --effort <actual-effort>` with the applicable rank table. No-context exit 0 establishes benchmark eligibility, not task correctness or publish permission. Alternatively use the explicit --qualification/--task/--project/--configuration/--risk route described in model-economics.md for a reviewed, exact scoped qualification. Invalid task evidence fails closed; the legacy checker does not infer task qualifications. A wrong result twice needs a better model, better specification, or missing information, rather than another identical retry.
 
-**Minimum tier: hard work goes straight to a benchmark-qualified brain at its measured high-or-above effort.** This includes architecture/design, costly-to-reverse decisions, unknown-cause bugs after a real attempt, conflicting constraints, security, data-loss or money risk, and the project's additional top-tier areas.
+**Minimum tier: hard work goes to a benchmark-qualified or applicable task-qualified brain, with high-or-above effort and meaningful independent current-result checks for high risk.** This includes architecture/design, costly-to-reverse decisions, unknown-cause bugs after a real attempt, conflicting constraints, security, data-loss or money risk, and the project's additional top-tier areas.
 
 The default floor covers auth/sessions/permissions; money, wallets and payouts; schemas, migrations and persisted formats; public API/SDK/protocol contracts; secrets/cryptography; concurrency and shared or distributed state; deploy, infrastructure and CI that ships code; deleting or retaining user data; changes across 4+ files. Projects may add areas; lowering the floor needs a written reason in their minimum-tier table (`assets/min-tier.template.md`).
 
 ### Effort ladder
 
-Use a measured eligible high-or-above configuration for every brain ruling. Choose the least costly qualifying effort supported by the actual tool; max is permitted when it is the qualifying configuration. Medium and low can execute an approved specification but cannot make brain decisions. Unmeasured higher effort does not inherit a lower effort score. Two failures need investigation, a better specification, or another eligible brain. Silent-failure math, costly-to-undo decisions and security need high plus a meaningful check (a targeted test, second review or preview); more thinking does not replace that evidence.
+Use an applicable reviewed qualification for a task ruling, or the measured high-or-above benchmark route for broader judgment. Choose the least costly qualifying effort supported by the actual tool; max is permitted when it is the qualifying configuration. Medium and low may exercise judgment only within an applicable reviewed low/medium-risk task qualification; otherwise they execute an approved specification. Unmeasured higher effort does not inherit a lower effort score. Two failures need investigation, a better specification, or another eligible brain. Silent-failure math, costly-to-undo decisions and security need high plus a meaningful check (a targeted test, second review or preview); more thinking does not replace that evidence.
 
 Check the actual model before each such decision: quota fallback can change it. Effort names and controls are provider-specific. Never claim to have changed your own model or effort. If required controls or a top model are unavailable, use a supported escalation or explain the constraint under the project's model gate.
 
@@ -101,11 +103,13 @@ Check the actual model before each such decision: quota fallback can change it. 
 
 Draft header: **DRAFT, below required tier.** Model: `<id>`; required tier and trigger; confidence; unknowns; review ticket. User permission to proceed below tier is draft authorization, not a model promotion.
 
-For models below 90% or with unverified effort, new design choices remain proposals. They may execute a brain-approved specification in an isolated branch; an eligible brain owns final review and integration. Publishing also requires the user's existing authorization, passing checks and the intended remote/branch; no model rank grants blanket push, force-push, merge or deploy permission.
+Without applicable task qualification or benchmark eligibility, new design choices remain proposals. Unverified effective effort never qualifies. They may execute a brain-approved specification in an isolated branch; an eligible brain owns final review and integration. Publishing also requires the user's existing authorization, passing checks and the intended remote/branch; no model rank grants blanket push, force-push, merge or deploy permission.
 
 The deciding brain records the ruling in the project's decision folder, or its task spec when no folder exists. Use `assets/decision-note.template.md`: model, status, context, decision, why, rejected options, done-when, open questions, ripple. A dropped/superseded decision needs its dependent tickets, skills and checkpoint updated; executors check the note's status first. Lower tiers relay and execute the ruling; a new fork goes back to the brain.
 
 Respect project main-session model gates. Recommend a smaller model only when appropriate; do not promise a fixed quota multiplier. Measure real usage in the environment where it occurs.
+
+**Session-start value advisory (`💡 VALUE NOTICE`):** When a session runs on an over-priced model or effort tier relative to an optimal alternative (e.g., `gpt-6-astra` vs `gpt-6.1-sol`, `claude-fable-5-1` vs `claude-opus-5-5`/`claude-sonnet-5-5`, or `max`/`high` effort on a routine single-module task), surface a non-blocking one-line value notice stating the exact `%` relative benchmark score delta versus the `×` base token rate / credit multiplier, and suggest the exact brain model + effort to open in a new chat if the user wants to save quota.
 
 ## Step 5: Write a tight task spec
 
@@ -113,7 +117,7 @@ Use `assets/task-spec.template.md`: goal, exact files, concrete instructions, co
 
 ## Step 6: Review the diff
 
-Compare the diff and verification evidence against done-when. Check scope, failure paths and changed behavior. Accept or request a specific correction; re-read whole files only when needed. The active top-ranked brain can review another tool's work unless the project reserves that review for a named owner.
+Compare the diff and verification evidence against done-when. Check scope, failure paths and changed behavior. Accept or request a specific correction; re-read whole files only when needed. An applicable benchmark- or task-qualified brain can review another tool's work unless the project reserves that review for a named owner.
 
 ## Step 7: Hand work across tools
 

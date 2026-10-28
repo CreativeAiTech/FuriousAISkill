@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { modelRank, modelTier, recordModel, readQuota } from './modelTier.mjs';
+import { modelRank, modelTier, recordModel, readQuota, valueAdvisory } from './modelTier.mjs';
 import { buildBrief, makeContext, loadConfig } from './baton.mjs';
 
 const shipped = JSON.parse(fs.readFileSync(new URL('../model-ranks.json', import.meta.url), 'utf8'));
@@ -59,4 +59,18 @@ test('baton brief passes actual effort to the gate', t => {
   const ctx=makeContext(root,loadConfig(root));
   assert.match(buildBrief(ctx,'codex',{},'gpt-6-astra',false,'high'),/FALLBACK MODEL/);
   assert.doesNotMatch(buildBrief(ctx,'codex',{},'gpt-6-astra',false,'max'),/FALLBACK MODEL/);
+});
+
+test('valueAdvisory nudges on overpriced models/efforts with exact % power vs cost multiplier', t => {
+  const root=project(t);
+  const ctx=makeContext(root,loadConfig(root));
+  assert.match(valueAdvisory('gpt-6-astra','max'),/\+1\.9%.*5×/);
+  assert.match(valueAdvisory('gpt-6-astra','high'),/\+0\.0%.*5×/);
+  assert.match(valueAdvisory('claude-fable-5-1','max'),/2\.5×.*5×/);
+  assert.match(valueAdvisory('claude-opus-5-5','max'),/\+7\.4%.*2×/);
+  assert.match(valueAdvisory('gemini-4-argon','high'),/2\.67×/);
+  assert.equal(valueAdvisory('gpt-6.1-sol','high'),'');
+  assert.equal(valueAdvisory('claude-opus-5-5','high'),'');
+  assert.equal(valueAdvisory('gemini-4-argon','medium'),'');
+  assert.match(buildBrief(ctx,'codex',{},'gpt-6-astra',false,'max'),/VALUE NOTICE/);
 });

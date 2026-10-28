@@ -28,7 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { modelTier, recordModel, readQuota, fallbackWarning } from "./modelTier.mjs";
+import { modelTier, recordModel, readQuota, fallbackWarning, valueAdvisory } from "./modelTier.mjs";
 
 export const DEFAULTS = {
   project: "",
@@ -256,6 +256,8 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
   else if (gate && !model && !fromHook) {
     out.push("⚠️ Model not reported. Rerun with `--model <your exact model id> --effort <your actual effort>`. Not the top model → stop and ask the user before any work.", "");
   }
+  const advisory = valueAdvisory(model, effort);
+  if (advisory) out.push(advisory, "");
   const stateText = readText(ctx.stateFile);
   const backlogText = readText(ctx.backlogFile);
   const hook = (name) => {

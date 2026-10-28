@@ -1,0 +1,282 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-10-28",
+  "surface": "provider API; actual tool availability may differ",
+  "entries": [
+    {
+      "model": "gpt-6-astra",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": null,
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-astra",
+      "mapping": "Native Codex may expose additional labels such as ultra. Verify the endpoint mapping; no API effort or score is inferred from a UI label."
+    },
+    {
+      "model": "gpt-6.1-sol",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "mapping": "Native Codex may expose additional labels such as ultra. Verify the endpoint mapping; no API effort or score is inferred from a UI label."
+    },
+    {
+      "model": "gpt-6-sol",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+      "mapping": "Native Codex may expose additional labels such as ultra. Verify the endpoint mapping; no API effort or score is inferred from a UI label."
+    },
+    {
+      "model": "gpt-6.1-terra",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+      "mapping": "Native Codex may expose additional labels such as ultra. Verify the endpoint mapping; no API effort or score is inferred from a UI label."
+    },
+    {
+      "model": "gpt-6-luna",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+      "mapping": "Native Codex may expose additional labels such as ultra. Verify the endpoint mapping; no API effort or score is inferred from a UI label."
+    },
+    {
+      "model": "claude-opus-5-5",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort",
+      "mapping": "Thinking mode and fallback behavior remain separate configuration."
+    },
+    {
+      "model": "claude-fable-5-1",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort",
+      "mapping": "Thinking mode and fallback behavior remain separate configuration."
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort",
+      "mapping": "Thinking mode and fallback behavior remain separate configuration."
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort",
+      "mapping": "Thinking mode and fallback behavior remain separate configuration."
+    },
+    {
+      "model": "gemini-4-argon",
+      "supported": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://ai.google.dev/gemini-api/docs/models/gemini-4-argon",
+      "mapping": "minimal is unsupported; OpenAI-compatibility minimal may map to low. No xhigh/max API levels."
+    },
+    {
+      "model": "gemini-3.8-flash",
+      "supported": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://ai.google.dev/gemini-api/docs/generate-content/thinking.md",
+      "mapping": "minimal is unsupported; OpenAI-compatibility minimal may map to low. No xhigh/max API levels."
+    },
+    {
+      "model": "grok-4-7",
+      "supported": [
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "high",
+      "source": "https://docs.x.ai/developers/models/grok-4.7",
+      "mapping": "Registry key grok-4-7 maps to documented endpoint grok-4.7; do not silently alias benchmark evidence."
+    },
+    {
+      "model": "deepseek-v4.1-flash-1017",
+      "supported": null,
+      "default": null,
+      "source": "https://api-docs.deepseek.com/guides/thinking_mode/",
+      "mapping": "Current deepseek-flash supports none/low/high/max; medium/xhigh map to high and ultra to max. Exact historical -1017 snapshot mapping is unverified; do not inherit it."
+    },
+    {
+      "model": "qwen3.8-max-0902",
+      "supported": [
+        "low",
+        "medium",
+        "xhigh"
+      ],
+      "default": "xhigh",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions",
+      "mapping": "high/max map to xhigh; minimal maps to low; none disables thinking. Numeric thinking_budget is another control and cannot be supplied with reasoning_effort."
+    },
+    {
+      "model": "muse-wonder-full",
+      "supported": null,
+      "default": null,
+      "source": "https://ai.meta.com/llama/",
+      "mapping": "Official page lists Wonder Full on Muse Code. Exact selectable effort/configuration controls not established; benchmark max alone is not API availability evidence."
+    },
+    {
+      "model": "kimi-k3-1-pro",
+      "supported": null,
+      "default": null,
+      "source": null,
+      "mapping": "Exact model/effort documentation not established by the official-source search; leave unverified. Do not substitute another Kimi release or hosting endpoint."
+    },
+    {
+      "model": "gemini-3.6-flash",
+      "supported": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://ai.google.dev/gemini-api/docs/thinking",
+      "mapping": "Documented Gemini 3.6 Flash thinking levels; no xhigh/max API levels."
+    },
+    {
+      "model": "gemini-3.5-flash-lite",
+      "supported": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "minimal",
+      "source": "https://ai.google.dev/gemini-api/docs/thinking",
+      "mapping": "Documented Gemini 3.5 Flash-Lite thinking levels; defaults to minimal. Used by Antigravity research subagents."
+    },
+    {
+      "model": "gpt-5.6-sol",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "low",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol",
+      "mapping": "Codex models_cache.json exposes low/medium/high/xhigh/max/ultra (default low). Legacy 5.6 tier; not in saved v4.3.2 authority table."
+    },
+    {
+      "model": "gpt-5.6-terra",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra",
+      "mapping": "Codex models_cache.json exposes low/medium/high/xhigh/max/ultra (default medium). Legacy 5.6 tier; not in saved v4.3.2 authority table."
+    },
+    {
+      "model": "gpt-5.6-luna",
+      "supported": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+      "mapping": "Codex models_cache.json exposes low/medium/high/xhigh/max (default medium). Legacy 5.6 tier; not in saved v4.3.2 authority table."
+    },
+    {
+      "model": "grok-4.20-0309-non-reasoning",
+      "supported": [
+        "none"
+      ],
+      "default": "none",
+      "source": "https://docs.x.ai/docs/models",
+      "mapping": "Non-reasoning fast Grok 4.20 endpoint routed by grok-bridge FAST."
+    },
+    {
+      "model": "grok-4.20-0309-reasoning",
+      "supported": null,
+      "default": null,
+      "source": "https://docs.x.ai/docs/models",
+      "mapping": "Reasoning Grok 4.20 endpoint routed by grok-bridge REASONING; bridge does not expose an explicit reasoning_effort knob."
+    },
+    {
+      "model": "grok-build-0.1",
+      "supported": null,
+      "default": null,
+      "source": "https://docs.x.ai/docs/models",
+      "mapping": "Agentic coding model routed by grok-bridge BUILD; configurable effort ladder not exposed by bridge."
+    }
+  ]
+}
