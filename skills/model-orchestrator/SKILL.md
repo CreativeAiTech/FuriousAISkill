@@ -2,12 +2,14 @@
 name: "model-orchestrator"
 description: Route work among available coding agents and model tiers, delegate bounded subtasks, review results, and preserve cross-tool handoffs. Use for agent/model choice, delegation, quota or token planning, and switching tools mid-project.
 metadata:
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # Model Orchestrator
 
 Spend judgment where it matters and measure the cost of delegation. This skill owns **who does the work**; `context-compressor` owns conversational checkpoints in `CONTEXT.md`. The user should not carry context between tools by hand.
+
+For research-to-experiment triage or an explicit efficiency experiment, read [research-triage.md](references/research-triage.md). Keep its detailed record format out of unrelated tasks.
 
 ## Step 0: Respect the project's setup
 
@@ -118,6 +120,8 @@ Compare the diff and verification evidence against done-when. Check scope, failu
 Persistent cross-tool work goes through the project's shared board: a self-contained `@gemini` / `@claude` / `@codex` / `@grok` / `@user` item with paths and verification. Preserve existing owners; do not retag their work merely because a different brain is active. If there is no shared board, provide a paste-ready task spec.
 
 Native subagent collaboration from Step 3 is separate from a persistent handoff. Do not create user-visible chats or send messages into existing chats unless the user asks. At quota exhaustion, save the baton before stopping; the next agent still follows the minimum tier.
+
+When the user authorizes fresh chats for different issues, keep the current issue together. Before a genuine scope change, save a compact handoff with [context-compressor](../context-compressor/SKILL.md), then create the authorized chat with only the relevant objective, constraints, decisions, artifact paths, verification and next step. Carry existing authorization forward; chat creation alone does not authorize adjacent work. Use a fresh chat for a small starting context; a fork retains history. Do not create one chat per worker, assume automatic shared memory, or promise token savings without usage evidence. If creation is unavailable, give the same handoff as a paste-ready block.
 
 ## Step 8: Grok pre-flight and banners
 

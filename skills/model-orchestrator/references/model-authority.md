@@ -87,4 +87,3 @@ Project overrides replace the entire rank table. A legacy override with only reg
 The Claude hook is a one-time advisory and cannot verify effort from its current transcript reader. It conservatively warns when effort is unknown; later calls still pass. The CLI and agent rules provide the decision gate, **not an OS sandbox, credential boundary, or Git protection**. Use repository branch protections for enforced publishing control.
 
 The portable policy has no user-specific paths, account requirements or guaranteed model aliases. It remains covered by the library's MIT license. Installation alone grants no authority to contact other chats or spend on external services.
-
