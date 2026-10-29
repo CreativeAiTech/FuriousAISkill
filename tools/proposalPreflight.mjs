@@ -8,6 +8,7 @@
  *
  * CLI:
  *   node proposalPreflight.mjs check <proposal.json> [--root <dir>] [--out <report.json>]
+ *   node proposalPreflight.mjs hash <file...> [--root <dir>]
  */
 import { spawnSync } from "node:child_process";
 import crypto from "node:crypto";
@@ -488,6 +489,32 @@ export async function preflightFile(proposalPath, options = {}) {
   return preflightProposal(proposal, { root, baseDir });
 }
 
+/**
+ * Compute LF-normalised SHA-256 for a list of root-relative file paths.
+ *
+ * @param {string[]} paths
+ * @param {{ root?: string }} [options]
+ * @returns {Array<{ path: string, sha256: string }>}
+ */
+export function hashFiles(paths, { root } = {}) {
+  const rootDir = path.resolve(root ?? process.cwd());
+  const results = [];
+  for (const p of paths) {
+    if (isPathUnsafe(p)) {
+      throw new Error(`Unsafe path: ${p}`);
+    }
+    const full = path.resolve(rootDir, p);
+    if (!fs.existsSync(full) || !fs.statSync(full).isFile()) {
+      throw new Error(`File not found: ${p}`);
+    }
+    results.push({
+      path: p.replace(/\\/g, "/"),
+      sha256: sha256Lf(fs.readFileSync(full, "utf8")),
+    });
+  }
+  return results;
+}
+
 function parseCliArgs(argv) {
   const positional = [];
   const flags = {};
@@ -513,25 +540,40 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const { positional, flags } = parseCliArgs(process.argv.slice(2));
   const cmd = positional[0];
   const target = positional[1];
-  if (cmd !== "check" || !target) {
-    process.stderr.write("Usage: node proposalPreflight.mjs check <proposal.json> [--root <dir>] [--out <report.json>]\n");
-    process.exit(2);
-  }
-  try {
-    const report = await preflightFile(target, { root: flags.root });
-    const json = JSON.stringify(report, null, 2) + "\n";
-    if (flags.out) {
-      fs.mkdirSync(path.dirname(path.resolve(flags.out)), { recursive: true });
-      fs.writeFileSync(flags.out, json, "utf8");
+  if (cmd === "check" && target) {
+    try {
+      const report = await preflightFile(target, { root: flags.root });
+      const json = JSON.stringify(report, null, 2) + "\n";
+      if (flags.out) {
+        fs.mkdirSync(path.dirname(path.resolve(flags.out)), { recursive: true });
+        fs.writeFileSync(flags.out, json, "utf8");
+      }
+      process.stdout.write(json);
+      if (report.verdict === "reject") {
+        process.exit(1);
+      } else {
+        process.exit(0);
+      }
+    } catch (err) {
+      process.stderr.write((err?.message || String(err)) + "\n");
+      process.exit(2);
     }
-    process.stdout.write(json);
-    if (report.verdict === "reject") {
-      process.exit(1);
-    } else {
+  } else if (cmd === "hash" && positional.length > 1) {
+    try {
+      const files = positional.slice(1);
+      const result = hashFiles(files, { root: flags.root });
+      process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       process.exit(0);
+    } catch (err) {
+      process.stderr.write((err?.message || String(err)) + "\n");
+      process.exit(2);
     }
-  } catch (err) {
-    process.stderr.write((err?.message || String(err)) + "\n");
+  } else {
+    process.stderr.write(
+      "Usage:\n" +
+      "  node proposalPreflight.mjs check <proposal.json> [--root <dir>] [--out <report.json>]\n" +
+      "  node proposalPreflight.mjs hash <file...> [--root <dir>]\n"
+    );
     process.exit(2);
   }
 }
