@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Manage bounded work in every session, select economical available models and efforts, delegate, verify evidence, and preserve cross-tool handoffs.
 metadata:
-  version: 1.7.0
+  version: 1.7.1
 ---
 
 # Model Orchestrator
@@ -23,9 +23,9 @@ The route is the same in every tool, model and effort. Where the tool cannot spa
 | Prepared edits, routine docs/config/content | Available mid model, low/medium effort |
 | Hard reasoning or demanding review | Stronger model/effort only as required by uncertainty, risk or failing evidence |
 
-Inspect the currently exposed model and effort controls. Pass both explicitly when supported. If tools cannot select child model/effort, disclose inheritance. A provider name or comparison table is not dispatch capability: never promise cross-provider work without a working tool. Do not change the main session's model or global configuration yourself. No automatic Astra/Max, assumed cost multiplier, or claim of savings without measured workflow usage. Same-tier delegation may serve independence/context isolation; state that purpose.
+Inspect the currently exposed model and effort controls. Pass both explicitly when supported. If tools cannot select child model/effort, disclose inheritance. A provider name or comparison table is not dispatch capability: never promise cross-provider work without a working tool. Do not change the main session's model or global configuration yourself. No automatic top model or max effort, assumed cost multiplier, or claim of savings without measured workflow usage. Same-tier delegation may serve independence/context isolation; state that purpose.
 
-Routing is provider-neutral across configured Gemini, Claude, OpenAI (including Terra), Grok and other providers. A local Codex-only dispatcher limits this session's calls, not the global policy. Use current availability, supported efforts, cost/quota evidence and task qualification; example registry IDs never guarantee an endpoint or tool is available.
+Routing is provider-neutral across configured Gemini, Claude, OpenAI, Grok and other providers. A local Codex-only dispatcher limits this session's calls, not the global policy. Use current availability, supported efforts, cost/quota evidence and task qualification; example registry IDs never guarantee an endpoint or tool is available.
 
 Read [model-economics.md](references/model-economics.md) for prices/task selection and [model-efforts.md](references/model-efforts.md) for supported versus measured settings. Historical data is not proof of current availability, runtime identity or competence.
 
@@ -43,7 +43,7 @@ Manager role never promotes model rank or weakens [model-authority.md](reference
 
 High-risk areas include auth/secrets/permissions, money, data loss, persisted formats/migrations, public contracts, concurrency/shared state, deployment and infrastructure that ships code, costly-to-reverse architecture, and project domain risks. Changes across 4+ files trigger triage rather than automatic expensive model selection; distinguish a prepared mechanical edit from a new architectural decision. High/critical qualification retains high-or-above measured effort and meaningful independent current-result checks. Do not transfer scores across releases, aliases, effort, harness or fallback behavior. A coarse rank is insufficient.
 
-Escalation is a specific missing decision/review, with uncertainty or failing evidence, exact scope and cost limits; see [escalation.md](../../rules/topics/escalation.md). Continue independent authorized low-risk work. If the required qualified route is unavailable, pause that decision or keep an authorized reversible result a labeled proposal pending qualified review. Never grant yourself qualification, invent an approval, or seek repeated approval for already authorized scope. A user request to proceed does not alter benchmark/task evidence.
+Escalation is a specific missing decision/review, with uncertainty or failing evidence, exact scope and cost limits; see `~/.agents/rules/topics/escalation.md`. Continue independent authorized low-risk work. If the required qualified route is unavailable, pause that decision or keep an authorized reversible result a labeled proposal pending qualified review. Never grant yourself qualification, invent an approval, or seek repeated approval for already authorized scope. A user request to proceed does not alter benchmark/task evidence.
 
 ## Review and integration
 

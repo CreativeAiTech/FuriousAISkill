@@ -4,7 +4,7 @@ description: >
   EXPERIMENTAL. Shared task board and handoff baton for several AI agents (Claude Code, Antigravity/Gemini, Cowork,
   parallel sessions or worktrees of the same tool) working on one git repo, with no server: tickets live in
   .agents/BACKLOG.md, the baton in .agents/STATE.md, and `node ~/.agents/tools/baton.mjs` claims, logs and closes
-  them. Use at the START of a session in a project that has .agents/STATE.md (read the brief, claim one ticket),
+  them. Use in repos without a project wrapper skill (see "Project wrapper") at the START of a session in a project that has .agents/STATE.md (read the brief, claim one ticket),
   when switching tasks, and BEFORE ENDING any session or when context/quota runs low (write the baton). Triggers:
   "continue", "where were we", "what's left", "pick up", "take over", "hand off", "claim", "I'm switching tools".
 metadata:
@@ -25,6 +25,8 @@ Agents don't share chat memory, so the repo is the memory. Two committed files:
 
 No project yet? `node ~/.agents/tools/baton.mjs init` writes all three (never overwrites). Below, `baton` means
 `node ~/.agents/tools/baton.mjs` (or the project's own wrapper, if its rules name one).
+
+**Project wrapper.** A project may ship its own wrapper CLI and overlay skill (e.g. Crownspire `tools/agentBrief.mjs` + `session-handoff`). That wrapper owns project-only commands such as `continue`, `ask`, `map`; where it exists, follow its skill and skip this one. The generic claim/focus/log/done/block/release flow and the log-line rules stay here.
 
 **Advisory, not enforced.** A claim is a line in a committed file; `git push` is the only lock. It stops honest
 agents from colliding, it doesn't stop an agent that skips the protocol. "Other agents" includes other sessions of

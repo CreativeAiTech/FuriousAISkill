@@ -2,7 +2,7 @@
 
 Keywords: rule, rules, CLAUDE.md, AGENTS.md, GEMINI.md, write rule, edit rule, map index, trigger table, compress
 
-Decision: Crownspire `.agents/decisions/2026-10-25-lean-rules.md`
+Decision (Crownspire repo): `.agents/decisions/2026-10-25-lean-rules.md`
 
 ## One home per rule
 - Each rule lives in exactly one file. Every other file points to it; never copy it.
