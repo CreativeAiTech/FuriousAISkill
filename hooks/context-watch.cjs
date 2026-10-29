@@ -3,7 +3,7 @@
 //
 // UserPromptSubmit: reads token usage from the transcript. Growth = current
 //   context minus the session's smallest context (the fixed baseline of system
-//   prompt + tools). Soft level: offer a checkpoint at a natural break.
+//   prompt + tools). No soft-level offer (user found it noise).
 //   Hard level: write CONTEXT.md after answering and tell the user to start fresh.
 // SessionStart (startup|clear|compact): if CONTEXT.md exists in the project,
 //   tell Claude it's there so a fresh chat can resume from it.
@@ -302,23 +302,6 @@ if ((growth >= HARD || forced) && (state.level < 2 || growth - state.lastHardAt 
             `propose one fresh session (initiation "own_initiative", context "fresh", a worktree, brief "continue" plus one line on what is next) the user can start with a click; ` +
             `without that tool, suggest opening a new chat in this folder and typing continue. The user decides when. `) +
         `Exception: if you are mid-way through a delicate step whose recent output still matters, or a question to the user is still open, finish that first and checkpoint at the next natural break.`,
-    },
-  });
-}
-
-if (growth >= SOFT && state.level < 1) {
-  saveState(input.session_id, { ...state, level: 1, lastHardAt: 0 });
-  out({
-    ...(creepNote ? { systemMessage: creepNote } : {}),
-    hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
-      additionalContext:
-        `[context-watch v${VERSION}] Conversation is getting long (${stats}). ` +
-        `Answer normally. If this reply finishes a task or milestone, or the topic is changing, end it with one line: ` +
-        `${saved === false
-          ? `offer a checkpoint ("say 'checkpoint' and I'll save CONTEXT.md so you can start fresh"), saving only what git does not already hold`
-          : `if git then shows everything committed and pushed, skip the checkpoint and say ${freshLine}; otherwise offer a checkpoint of only what git does not hold`}. ` +
-        `If not, make that offer at the first later reply that does; don't drop it.`,
     },
   });
 }
