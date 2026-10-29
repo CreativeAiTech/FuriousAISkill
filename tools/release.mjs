@@ -126,6 +126,8 @@ function parseFragment(filePath, fileName) {
   if (!title) {
     abort(`fragment ${fileName} is missing title in frontmatter`);
   }
+  // Wrap unescaped bot/ticket role handles (@user, @claude, etc.) in backticks so GitHub Markdown does not parse them as real user mentions
+  title = title.replace(/(^|[^\w`])@(user|claude|gemini|codex|grok)\b/g, '$1`@$2`');
 
   return { file: fileName, bump, title, body };
 }

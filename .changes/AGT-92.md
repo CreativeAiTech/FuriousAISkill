@@ -1,6 +1,6 @@
 ---
 bump: minor
-title: Equal agents; review findings go to owners; @user tickets stay refused
+title: "Equal agents; review findings go to owners; `@user` tickets stay refused"
 ---
 **Changes**
 - Commit 95c30ee: agent tags are hints, any agent takes any unclaimed ticket (claim = don't collide). `baton brief` lists every non-human ready ticket; `focus` no longer refuses on a tag mismatch.
