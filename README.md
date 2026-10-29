@@ -9,14 +9,14 @@ and the expensive model burns quota on file searches a cheap one could do. This 
 used daily on a real game project.
 
 **What's inside**
-- **Orchestration rules** (`rules/token-optimization.md`, `model-orchestrator` skill): the top model plans and reviews,
-  cheaper subagents (`worker`, `verifier`) search, edit and run checks. Hard decisions stay on the top tier.
+- **Orchestration rules** (`rules/token-optimization.md`, `model-orchestrator` skill): every session manages its bounded objective,
+  chooses economical available models/efforts and delegates cohesive work. Qualification gates specific high-risk decisions and final approval.
 - **Task board** (`task-board` skill, `tools/baton.mjs`, experimental, opt-in): tickets with claims and leases, a handoff
   "baton" each session writes before it stops, and a brief the next agent reads first. `git push` is the lock.
 - **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
 - **Token report** (`tools/tokenReport.mjs`): observed usage, telemetry coverage, and modeled price comparisons.
 
-`sync.mjs` maintains the supported Claude Code (`~/.claude`) and Antigravity (`~/.gemini`) copies. Codex discovers canonical skills directly in `~/.agents/skills` and project `.agents/skills`; no additional Codex copy is needed.
+`sync.mjs` maintains Claude Code (`~/.claude`) and Antigravity (`~/.gemini`) copies plus a managed Codex policy block (`~/.codex/AGENTS.md`). Codex discovers canonical skills directly in `~/.agents/skills` and project `.agents/skills`; no additional skill copy is needed.
 Status: personal kit, shared as-is. MIT licensed, issues welcome.
 
 ## Install
@@ -28,7 +28,7 @@ node ~/.agents/sync.mjs
 
 Tip: a project can run this from its install script (clone if missing, fast-forward when clean, then sync) so every machine stays current.
 
-`sync.mjs` generates these Claude Code and Antigravity integrations:
+`sync.mjs` generates these integrations:
 
 | Source | Claude Code | Antigravity |
 | :--- | :--- | :--- |
@@ -37,14 +37,16 @@ Tip: a project can run this from its install script (clone if missing, fast-forw
 | `agents/*.md` (subagents, pinned models) | `~/.claude/agents/<file>` | none (uses its built-in subagents) |
 | `hooks/claude-hooks.json` (hook manifest) | `hooks` in `~/.claude/settings.json` (managed entries only) | none |
 
+Codex receives the canonical `rules/token-optimization.md` in a managed block in `~/.codex/AGENTS.md`; content outside the block is preserved. `node ~/.agents/sync.mjs --policy-only` updates skills/rules and that block, skipping agent definitions, hook registration, settings and MCP. To validate without writing to the real home, use `node ./sync.mjs --policy-only --target-home <absolute-fixture-dir>`. This target option redirects generated destinations only; experimental source opt-ins remain local to the kit and cannot be changed with policy-only mode.
+
 Generated copies are marked. Sync removes stale generated copies and never touches hand-written files.
 Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.agents/skills/`), and project rules win.
 
-**Codex:** use the source skills from `~/.agents/skills` and the project skills from `.agents/skills` ([official skills documentation](https://learn.chatgpt.com/guides/best-practices)). Invoke the relevant skill, or let project `AGENTS.md` entry guidance reference canonical kit rules. This integration does not install a global Codex AGENTS.md, configuration or hooks. Claude-specific hooks, agent definitions, transcript metrics and automatic startup reports do not become Codex features; run applicable commands explicitly and report their actual results.
+**Codex:** use source skills from `~/.agents/skills` and project skills from `.agents/skills` ([official skills documentation](https://learn.chatgpt.com/guides/best-practices)). The global managed AGENTS.md block supplies manager startup guidance and points to the canonical skill. Sync does not install Codex configuration or hooks. Claude-specific hooks, agent definitions, transcript metrics and automatic startup reports do not become Codex features; run applicable commands explicitly and report actual results. Other hosts/providers need an explicit integration consuming the canonical policy; listed models are not dispatch promises.
 
 ## Benchmark-based model authority
 
-The reusable policy and sourced comparison are in [model authority](skills/model-orchestrator/references/model-authority.md). Each model/effort pair is scored independently against the same benchmark version. The legacy benchmark route requires at least 90% of the leader and high effort or above. An explicit reviewed qualification can instead grant judgment for an exact project/task/configuration/risk; it does not promote the model globally or bypass main-session gates. The 0–100 relative index is not IQ. Configurations without applicable current evidence only propose or execute approved specifications. Supported effort options, exact sourced Standard API prices and cost per accepted task are described in [model economics](skills/model-orchestrator/references/model-economics.md). Use `node tools/modelValue.mjs <scenario.json>` for offline workflow price comparisons; no model dispatch or quota prediction occurs.
+The reusable policy and sourced comparison are in [model authority](skills/model-orchestrator/references/model-authority.md). Each model/effort pair is scored independently against the same benchmark version. The legacy benchmark route requires at least 90% of the leader and high effort or above. An explicit reviewed qualification can instead grant judgment for an exact project/task/configuration/risk; it does not promote a model globally. Every session manages independently of this gate; unknown/lower configurations can research and execute authorized prepared low-risk scope, while ambiguous high-risk decisions/final approval need applicable evidence. The 0–100 relative index is not IQ. Supported efforts, sourced API prices and cost per accepted task are described in [model economics](skills/model-orchestrator/references/model-economics.md). `node tools/modelValue.mjs <scenario.json>` compares offline workflow prices; it does not dispatch models or predict quota.
 
 ```sh
 node tools/modelAuthority.mjs gpt-6-astra --effort max
@@ -52,7 +54,7 @@ node tools/modelAuthority.mjs gpt-6-astra --effort high
 node --test tools/modelAuthority.test.mjs tools/modelTier.test.mjs
 ```
 
-The checker exits 0 for an eligible pair, 2 for a non-eligible pair and 1 for usage/read errors. The model gate remains an advisory workflow: the Claude hook blocks once and does not establish effort; it is not a security boundary or a push hook. Actual model/effort/configuration must be verified before a brain decision. No rank authorizes publishing.
+The checker exits 0 for an eligible pair, 2 for a non-eligible pair and 1 for usage/read errors. The model advisory never blocks startup and does not establish effort; it is not a security boundary or a push hook. Verify actual model/effort/configuration before a qualified ruling. No rank authorizes publishing.
 
 Project `.agents/model-ranks.json` overrides must include current `authority` evidence as well as coarse ranks; legacy rank-only overrides no longer grant brain authority. Copy the kit table to start, preserve the global leader denominator, and record sources for new exact entries. Registry keys are not guaranteed endpoint IDs; resolve aliases explicitly.
 
@@ -64,12 +66,12 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | Item | Owns |
 | :--- | :--- |
 | `rules/token-optimization.md` | Lean context, generic lifecycle, bounded tool use, checkpoint trigger |
-| `skills/model-orchestrator` | Who does a task: agent (Gemini / Claude Code / Codex / Grok), actual model tier, native subtasks versus persistent handoffs, minimum tier (default top-tier areas are a floor projects can't silently lower), delegation, task specs, decision notes, cross-tool handoff, Grok banners, token audits. Templates in `assets/` (task spec, decision note, project min-tier table) |
+| `skills/model-orchestrator` | Universal manager role; economical provider-neutral model/effort routing, bounded delegation, action-specific qualification, independent exact-revision review, task specs and handoffs. Templates in `assets/` (task spec, decision note, project min-tier table) |
 | `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
 | `tools/contextProfile.mjs` | Context profile: the project's measured starting context, heavy-turn size and window headroom; sets context-watch's nudges, re-runs daily at session start, report at `.agents/reports/context-profile.md` |
 | `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from context-watch, report at `.agents/reports/context-hygiene.md` |
 | `hooks/rule-lint.mjs` + `tools/lib/ruleLint.mjs` | Write-time rule lint (Claude Code): after an edit to CLAUDE.md, AGENTS.md, GEMINI.md or `.agents/rules/**`, one warning line for a big file with no "Before you" table, a topic file without `Keywords:`, a line duplicated in another always-on file, or a missing trigger-table path; never blocks |
-| `tools/modelTier.mjs` + `tools/modelAuthority.mjs` + `hooks/model-check.mjs` | Model fallback gate (opt-in: `"modelGate": true` in `.agents/baton.config.json`): a non-top main model is stopped once and must ask the user (`baton.mjs --model <id> --effort <effort>` for tools without hooks); ranks in `model-ranks.json`, an unranked model asks "top, mid or small?" and `modelTier.mjs learn` records the coarse rank. The default benchmark route requires current exact model/effort evidence at >=90% of the benchmark leader; an explicit reviewed task qualification covers only its precise project/task/configuration/risk. Main-session gates remain separate; learning top alone cannot grant authority |
+| `tools/modelTier.mjs` + `tools/modelAuthority.mjs` + `hooks/model-check.mjs` | Manager action-scope advisory (`"modelGate": true` opts into reported configuration evidence): no startup tool denial or rank-based ticket hiding. Legacy tier exports/QUOTA rows remain compatible. Exact authority evidence and scoped task qualification remain fail-closed; coarse rank and manager role grant no authority |
 | `tools/contextPacket.mjs` | Verified source packets for focused workers (`build` / `verify`): slices exact source line ranges with file/excerpt SHA-256 provenance, byte bounds, and omitted-context disclosures; rejects stale files, altered excerpts, path escapes and oversized packets |
 | `tools/tokenReport.mjs` | Token report: observed usage, modeled overhead/delegation comparisons and context hygiene (see below) |
 | `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |

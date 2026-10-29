@@ -10,7 +10,7 @@ Those relative links describe the Git repository layout. In a generated Claude/G
 
 ## Decision rule
 
-There are two explicit evidence routes: the benchmark gate below, or a reviewed qualification for an exact project/task/configuration/risk in [model-economics.md](model-economics.md). A task-qualified model may exercise judgment only inside that scope, even below the aggregate benchmark cutoff. Cost alone cannot qualify it. Main-session project gates remain separate.
+There are two explicit evidence routes: the benchmark gate below, or a reviewed qualification for an exact project/task/configuration/risk in [model-economics.md](model-economics.md). A task-qualified model may exercise judgment only inside that scope, even below the aggregate benchmark cutoff. Cost alone cannot qualify it. Every session has manager role independently of this authority; qualification gates the specific high-risk decision or final approval, never session startup.
 
 For the **benchmark route**, use **100 × recorded score / global leader score** on one comparable benchmark version. The leader is 100; a brain must be **at least 90** and run at a measured **high, xhigh, max or supported equivalent** effort. Do not round a result up across the gate. This high-effort/90 rule applies to benchmark eligibility; the task route uses its reviewed quality/risk requirements. No score transfers between efforts, model releases, aliases, harnesses or fallback configurations. Unreported effort, unknown IDs and missing scores grant no benchmark authority. A valid task qualification need not have an aggregate benchmark score.
 
@@ -24,13 +24,15 @@ Use **Artificial Analysis Intelligence Index v4.3.2** throughout this snapshot. 
 | :--- | :--- |
 | Verified brain | Architecture decisions, task specifications, implementation and final review; meaningful verification still required |
 | Applicable task qualification | Scoped judgment and review within its exact task/risk; no global promotion; high-risk verification remains |
-| No applicable qualification and below benchmark gate | Research and design proposals; implementation only from a brain-approved specification; return changed decisions to a brain |
-| Unverified model/configuration | Research and proposals; no self-promotion |
+| No applicable qualification and below benchmark gate | Manager, research and proposals; execute authorized prepared low-risk work in an isolated branch with verification; obtain qualified high-risk decisions/final approval |
+| Unverified model/configuration | Manager and bounded research/prepared low-risk execution; no inferred authority or self-promotion |
 | Publishing executor | Execute an explicitly authorized push/merge/deploy after eligible brain review of the current diff and passing checks; model score alone grants no publish rights |
 
-Use current session model and effort evidence; do not infer them from the product name or an advertised selectable-model list. The checker evaluates recorded benchmark evidence; it cannot attest which model is actually running. If identity, effective effort, evaluated fallback behavior or endpoint mapping cannot be verified, keep the work a proposal. The task checker evaluates declared reviewed evidence; it cannot attest runtime identity or honest evaluations. Resolve aliases to verified registry keys explicitly; no substring promotion. Registry keys in the table are local identifiers, not a promise that every provider accepts that exact API string.
+Use current session model and effort evidence; do not infer them from the product name or an advertised selectable-model list. The checker evaluates recorded benchmark evidence; it cannot attest which model is actually running. If identity, effective effort, evaluated fallback behavior or endpoint mapping cannot be verified, qualified rulings remain proposals; bounded authorized prepared work can proceed. The task checker evaluates declared reviewed evidence; it cannot attest runtime identity or honest evaluations. Resolve aliases to verified registry keys explicitly; no substring promotion. Registry keys in the table are local identifiers, not a promise that every provider accepts that exact API string.
 
 An existing authorized publish flow does not need repeated approval. A new destination, force-push, release or deployment requires its own applicable authorization. Workers may run the mechanical publish command only after an eligible brain has approved the exact revision; they cannot approve themselves.
+
+A qualified separate child/sibling/shared manager may review edits it did not author, with the current diff, requirements and failure evidence. Approval binds the exact revision/diff; changed edits require renewed review. Preserve explicitly reserved external or named-owner audits. Manager role does not change evidence or permission requirements.
 
 ## Historical comparable configurations (v4.3.2)
 

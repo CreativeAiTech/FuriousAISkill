@@ -1,143 +1,60 @@
 ---
 name: "model-orchestrator"
-description: Route work among available coding agents and model tiers, delegate bounded subtasks, review results, and preserve cross-tool handoffs. Use for agent/model choice, delegation, quota or token planning, and switching tools mid-project.
+description: Manage bounded work in every session, select economical available models and efforts, delegate, verify evidence, and preserve cross-tool handoffs.
 metadata:
-  version: 1.4.0
+  version: 1.5.0
 ---
 
 # Model Orchestrator
 
-Spend judgment where it matters and measure the cost of delegation. This skill owns **who does the work**; `context-compressor` owns conversational checkpoints in `CONTEXT.md`. The user should not carry context between tools by hand.
+Every chat/session starts in **MANAGER** role, regardless of model. Role describes responsibility, not capability or authority. The manager owns the bounded user objective, triages risk, chooses the cheapest adequate actually available model and supported effort, delegates bounded work, tracks evidence, and notices scope or complexity growth. It may delegate a stronger reviewer of work it or its workers authored. No model is excluded from managing, researching, or executing authorized prepared low-risk work.
 
-For research-to-experiment triage or an explicit efficiency experiment, read [research-triage.md](references/research-triage.md). Keep its detailed record format out of unrelated tasks.
+Generic orchestration lives here; projects supply domain risks, verifier commands and ownership. Read their entrypoints and preserve active claims. Direct user instructions take precedence and existing authorization carries forward. Never create a session-wide stop/yes loop because a model is lower-ranked or unknown. Qualification gates apply to ambiguous high-risk decisions and final approval, not to the whole session.
 
-## Step 0: Respect the project's setup
+## Choose a bounded route
 
-Read project entrypoints (AGENTS.md / CLAUDE.md / GEMINI.md) and use their task board, ownership, model gate, art pipeline, and verification commands. A direct user request takes precedence. Existing authorization carries forward; do not invent a new approval gate.
+State the actual route briefly, with model/effort where controllable, purpose, scope and stop point. There is no mandatory scout → brain → worker → verifier chain. Do not spawn one agent per phase. Batch cohesive discovery, edits and verification in one worker when useful. The manager may do tiny coordination and spot-check reads; delegate substantive discovery/editing when tools are available. If delegation is unavailable, remain manager and execute within bounded capabilities with verification; escalate only the missing action.
 
-Use the **actual running model**, not the product name, to establish its tier. A project rank table overrides the kit table; an unknown model is not automatically a brain. A model may exercise judgment when its exact model/effort configuration passes the benchmark gate or has an applicable reviewed project/task/configuration/risk qualification in [references/model-authority.md](references/model-authority.md). Read that reference before ranking, architecture, final review, or publishing. A coarse top rank alone is insufficient. Preserve assigned tickets and active claims when choosing who works next.
-
-## Step 1: Pick the agent
-
-| Agent | Use it for | Limits |
-| :--- | :--- | :--- |
-| **Gemini / Antigravity** `@gemini` | Routine edits, content, pipeline runs; default image work where the project uses Gemini | Judgment requires applicable benchmark or task qualification |
-| **Claude Code** `@claude` | Architecture, hard bugs, refactors, implementation and review | Tier follows the actual model; use its available tools |
-| **Codex** `@codex` | Architecture, hard bugs, refactors, implementation and review | Judgment requires benchmark eligibility or an applicable task qualification; tool access and effort controls vary by session |
-| **xAI Grok** `@grok` | Proposals, implementation or second opinions when suitable tools exist | Historical scored configurations are below the benchmark gate; task qualification, access and cost must be checked |
-| **User** `@user` | Secrets, account actions, taste and decisions reserved for the user | Do agent-executable work before asking for a concrete final approval |
-
-For price, effort or task-category selection, read [model-economics.md](references/model-economics.md); for supported versus measured effort settings, read [model-efforts.md](references/model-efforts.md). Prefer the least costly qualified route meeting the task quality/risk and latency requirements, measured as accepted outcomes per total workflow dollar. General benchmark points do not measure UI/UX or creative quality.
-
-Choose the active capable benchmark- or task-qualified brain for judgment, respecting project ownership and available quota. Do not route every decision to Claude merely because an older table names it. Use measured availability/cost where known; do not assume a fixed scarcity order across providers.
-
-| Task | Route |
+| Work | Economical starting point |
 | :--- | :--- |
-| Project pet art or pipeline stages | Keep the project's image route (normally `@gemini`); native Codex image generation is a capability, not permission to replace that route |
-| Architecture, unknown-cause bug, risky-diff review, feature specifications | Available benchmark- or applicable task-qualified brain with required risk checks |
-| Implementation in a top-tier area | Execute the written decision with a suitable worker; an applicable qualified brain reviews |
-| Routine code, docs, content, checks | Cheapest capable available worker; inline when delegation overhead outweighs its benefit |
-| Barks, taunts, names, divergent brainstorming | Compare capable creative candidates against the brief and cost; Grok `auto` is an option if connected and within budget; active agent curates |
-| Formula sanity check or outside code critique | Useful independent second opinion within budget; an applicable qualified brain decides |
-| Taste, secrets or account action | User, only for the part that needs them |
+| Simple search, extraction, mechanical checks | Available small model, low effort |
+| Prepared edits, routine docs/config/content | Available mid model, low/medium effort |
+| Hard reasoning or demanding review | Stronger model/effort only as required by uncertainty, risk or failing evidence |
 
-Whichever agent is active executes `@grok` items and records the result. If Grok is unavailable, finish natively where possible. Do not spend an external call on a question already answerable from the repo.
+Inspect the currently exposed model and effort controls. Pass both explicitly when supported. If tools cannot select child model/effort, disclose inheritance. A provider name or comparison table is not dispatch capability: never promise cross-provider work without a working tool. Do not change the main session's model or global configuration yourself. No automatic Astra/Max, assumed cost multiplier, or claim of savings without measured workflow usage. Same-tier delegation may serve independence/context isolation; state that purpose.
 
-## Step 2: The lifecycle (non-trivial work)
+Routing is provider-neutral across configured Gemini, Claude, OpenAI (including Terra), Grok and other providers. A local Codex-only dispatcher limits this session's calls, not the global policy. Use current availability, supported efforts, cost/quota evidence and task qualification; example registry IDs never guarantee an endpoint or tool is available.
 
-1. **Investigate:** bound searches and reads; return facts, root cause, paths and line numbers.
-2. **Plan:** the brain chooses the minimum change. Surface unresolved material trade-offs; do not reopen decisions already authorized.
-3. **Implement:** give mechanical work a tight spec; keep ambiguous or subtle work with the brain.
-4. **Verify:** use the project's checks, report their actual results, and repair failures. The same error twice means stop and report the blocker.
-5. **Review and checkpoint:** the brain checks the diff and evidence, records the baton, and checkpoints long conversations when useful.
+Read [model-economics.md](references/model-economics.md) for prices/task selection and [model-efforts.md](references/model-efforts.md) for supported versus measured settings. Historical data is not proof of current availability, runtime identity or competence.
 
-Trivial answers from loaded context, one-line edits, or a couple of quick calls can stay inline. Delegation is useful when its expected latency or context benefit justifies the additional work.
+## Delegate and execute
 
-## Step 3: Delegate inside the tool?
+Native helpers stay under the parent's ticket; do not create persistent tickets/claims or user-visible chats for each helper. Use [task-spec.template.md](assets/task-spec.template.md): objective, exact owned paths or read-only scope, constraints, acceptance checks, failure evidence, short receipt and stop point. Keep shared-checkout edits disjoint. Use an isolated branch for ready authorized implementation; preserve other agents' work and ownership.
 
-Prefer a cheaper capable tier for collection, mechanical edits and verification. A bounded same-tier helper is also reasonable for independent work, faster completion or isolating a large context. State that purpose; do not describe it as token savings without measurements. Avoid a cold spawn for work simpler than its setup.
+Set explicit call/time/spend limits proportional to the task (for example report back by 30 calls, earlier on a blocker). Do not recursively delegate or escalate without bounds. After the same failure twice, stop identical retries and identify the missing information or capability. Scope growth triggers fresh risk/budget triage before additional work. Routine implementation choices within an authorized prepared scope proceed automatically, including on unknown/lower models.
 
-Native subagents work **under the parent's ticket**: give each a goal, owned files or read-only scope, constraints, done-when and a stop point (about 30 calls or sooner). They return results to the parent, which reviews and integrates. Do not create a persistent BACKLOG ticket or claim for every temporary helper. Keep shared-checkout edits disjoint.
+Use project verification commands; report actual outcomes and repair relevant failures within scope. Do not invent successful checks, reviewer dispatch, runtime model identity or approval. `context-compressor` owns conversational checkpoints; retain exact objective, decisions, authorization, evidence and next action in the project baton.
 
-Native agents inherit the model unless the tool actually supports an explicit override. Use only the model and effort controls exposed by the current environment. Do not invent a cheaper model, change the main session's model yourself, or assume a tool has another provider's agent types.
+## Qualification and action gates
 
-### Codex worker defaults
+Manager role never promotes model rank or weakens [model-authority.md](references/model-authority.md). Before an ambiguous high-risk decision or final approval, use the exact model/effort evidence and applicable benchmark or reviewed task/configuration/risk qualification. `node <kit>/tools/modelAuthority.mjs <model> --effort <actual-effort>` checks benchmark evidence; the explicit `--qualification/--task/--project/--configuration/--risk` route checks declared task evidence. Invalid evidence fails closed. Unverified runtime identity or effort cannot establish authority; a self-reported brief is not runtime proof.
 
-Use the currently exposed native model list and the rank table; a rank is a project role, not a provider guarantee. Register exact IDs before routing and leave unfamiliar variants gated. The registered GPT worker routes are:
+High-risk areas include auth/secrets/permissions, money, data loss, persisted formats/migrations, public contracts, concurrency/shared state, deployment and infrastructure that ships code, costly-to-reverse architecture, and project domain risks. Changes across 4+ files trigger triage rather than automatic expensive model selection; distinguish a prepared mechanical edit from a new architectural decision. High/critical qualification retains high-or-above measured effort and meaningful independent current-result checks. Do not transfer scores across releases, aliases, effort, harness or fallback behavior. A coarse rank is insufficient.
 
-| Work | Native model | Effort starting point |
-| :--- | :--- | :--- |
-| Inventory, extraction, simple checks | `gpt-6-luna` (small) | low for mechanical work; high for a harder scan |
-| Implementation from a decided spec | `gpt-6.1-sol` (mid); `gpt-6-sol` when explicitly available | medium |
-| Bounded visual/computer-use work | `gpt-6.1-terra` (mid), with the required tools exposed | medium |
-| Top-tier ruling or demanding independent review | Exact benchmark- or applicable task-qualified model/effort | Lowest qualifying supported effort; high risk retains high+ and independent current-result checks |
+Escalation is a specific missing decision/review, with uncertainty or failing evidence, exact scope and cost limits; see [escalation.md](../../rules/topics/escalation.md). Continue independent authorized low-risk work. If the required qualified route is unavailable, pause that decision or keep an authorized reversible result a labeled proposal pending qualified review. Never grant yourself qualification, invent an approval, or seek repeated approval for already authorized scope. A user request to proceed does not alter benchmark/task evidence.
 
-Pass both model and supported effort explicitly so helpers do not inherit an expensive main setting by accident. If the spawn API requires fresh context for overrides, use that mode and supply a self-contained spec. Effort changes brain eligibility; never transfer a score between efforts. A lower-tier native worker may execute the brain's decided spec and return its result; the parent retains judgment, verification and closure. Standalone fallback-session restrictions still apply. Do not switch the main model or rewrite global configuration to achieve this.
+## Review and integration
 
-## Step 4: Pick the tier
+Compare the current diff and verification evidence against acceptance requirements. A separate reviewer may be a child/sibling or shared manager if it did not author those edits, receives the current diff, requirements and failure evidence, and has applicable qualification. Record approval against the exact revision (and diff identity for uncommitted changes); changed edits invalidate that approval. A manager cannot self-approve. Preserve explicitly reserved independent external/named-owner reviewer requirements; orchestration does not replace them.
 
-| Tier | Typical work |
-| :--- | :--- |
-| Small | File search, summaries, content, checks, mechanical work from a spec |
-| Mid | Features and refactors inside a module; implementation from a design |
-| Top | Architecture, difficult debugging, high-risk judgment, final review |
+Publishing still requires applicable existing user authorization, intended destination, current qualified approval and passing checks. No role or benchmark grants secret access, OS permissions, ownership changes, force-push, merge or deploy authority. Do executable preparation before asking for concrete final approval where needed.
 
-Use the rank table, actual model ID and actual effort. Before a brain decision, run `node <kit>/tools/modelAuthority.mjs <model-id> --effort <actual-effort>` with the applicable rank table. No-context exit 0 establishes benchmark eligibility, not task correctness or publish permission. Alternatively use the explicit --qualification/--task/--project/--configuration/--risk route described in model-economics.md for a reviewed, exact scoped qualification. Invalid task evidence fails closed; the legacy checker does not infer task qualifications. A wrong result twice needs a better model, better specification, or missing information, rather than another identical retry.
+## Cross-tool and special routes
 
-**Minimum tier: hard work goes to a benchmark-qualified or applicable task-qualified brain, with high-or-above effort and meaningful independent current-result checks for high risk.** This includes architecture/design, costly-to-reverse decisions, unknown-cause bugs after a real attempt, conflicting constraints, security, data-loss or money risk, and the project's additional top-tier areas.
+Persistent cross-tool work uses the project's shared board and ownership with a self-contained task and verification. Create/send messages to user-visible chats only when the user explicitly authorizes it. If tools are unavailable, provide the bounded handoff; never claim it was dispatched. At quota exhaustion save the baton before stopping.
 
-The default floor covers auth/sessions/permissions; money, wallets and payouts; schemas, migrations and persisted formats; public API/SDK/protocol contracts; secrets/cryptography; concurrency and shared or distributed state; deploy, infrastructure and CI that ships code; deleting or retaining user data; changes across 4+ files. Projects may add areas; lowering the floor needs a written reason in their minimum-tier table (`assets/min-tier.template.md`).
+Keep project pet-art/image routes. Creative candidates should fit the brief and cost; do not treat general benchmarks as UI/UX or creative quality evidence. For explicit efficiency experiments, read [research-triage.md](references/research-triage.md).
 
-### Effort ladder
+For connected Grok, use bridge `auto` unless the user specifies a model, check budget once per batch, and show model/task/budget before paid dispatch plus actual usage afterward. Below 10% remaining call only on explicit request; at zero finish with available capabilities. Do not call externally for repo-answerable questions or include secrets. Clean up only this call's relay artifacts.
 
-Use an applicable reviewed qualification for a task ruling, or the measured high-or-above benchmark route for broader judgment. Choose the least costly qualifying effort supported by the actual tool; max is permitted when it is the qualifying configuration. Medium and low may exercise judgment only within an applicable reviewed low/medium-risk task qualification; otherwise they execute an approved specification. Unmeasured higher effort does not inherit a lower effort score. Two failures need investigation, a better specification, or another eligible brain. Silent-failure math, costly-to-undo decisions and security need high plus a meaningful check (a targeted test, second review or preview); more thinking does not replace that evidence.
-
-Check the actual model before each such decision: quota fallback can change it. Effort names and controls are provider-specific. Never claim to have changed your own model or effort. If required controls or a top model are unavailable, use a supported escalation or explain the constraint under the project's model gate.
-
-| Situation | Action |
-| :--- | :--- |
-| At/above the required tier and effort | Decide and write the decision; delegate specified execution when useful |
-| Below tier, top brain reachable | Use an available top-model subagent or queue a persistent handoff to the appropriate top-ranked agent |
-| Top brain unavailable, decision hard to reverse | Stop that decision and queue the missing top-tier work |
-| Top brain unavailable, reversible draft requested/authorized | Label the draft and queue top-tier review; commit nothing irreversible |
-
-Draft header: **DRAFT, below required tier.** Model: `<id>`; required tier and trigger; confidence; unknowns; review ticket. User permission to proceed below tier is draft authorization, not a model promotion.
-
-Without applicable task qualification or benchmark eligibility, new design choices remain proposals. Unverified effective effort never qualifies. They may execute a brain-approved specification in an isolated branch; an eligible brain owns final review and integration. Publishing also requires the user's existing authorization, passing checks and the intended remote/branch; no model rank grants blanket push, force-push, merge or deploy permission.
-
-The deciding brain records the ruling in the project's decision folder, or its task spec when no folder exists. Use `assets/decision-note.template.md`: model, status, context, decision, why, rejected options, done-when, open questions, ripple. A dropped/superseded decision needs its dependent tickets, skills and checkpoint updated; executors check the note's status first. Lower tiers relay and execute the ruling; a new fork goes back to the brain.
-
-Respect project main-session model gates. Recommend a smaller model only when appropriate; do not promise a fixed quota multiplier. Measure real usage in the environment where it occurs.
-
-**Session-start value advisory (`💡 VALUE NOTICE`):** When a session runs on an over-priced model or effort tier relative to an optimal alternative (e.g., `gpt-6-astra` vs `gpt-6.1-sol`, `claude-fable-5-1` vs `claude-opus-5-5`/`claude-sonnet-5-5`, or `max`/`high` effort on a routine single-module task), surface a non-blocking one-line value notice stating the exact `%` relative benchmark score delta versus the `×` base token rate / credit multiplier, and suggest the exact brain model + effort to open in a new chat if the user wants to save quota.
-
-## Step 5: Write a tight task spec
-
-Use `assets/task-spec.template.md`: goal, exact files, concrete instructions, constraints, checkable done-when, short output format. Give workers the minimum necessary context; split independent work so one failure does not block all of it.
-
-## Step 6: Review the diff
-
-Compare the diff and verification evidence against done-when. Check scope, failure paths and changed behavior. Accept or request a specific correction; re-read whole files only when needed. An applicable benchmark- or task-qualified brain can review another tool's work unless the project reserves that review for a named owner.
-
-## Step 7: Hand work across tools
-
-Persistent cross-tool work goes through the project's shared board: a self-contained `@gemini` / `@claude` / `@codex` / `@grok` / `@user` item with paths and verification. Preserve existing owners; do not retag their work merely because a different brain is active. If there is no shared board, provide a paste-ready task spec.
-
-Native subagent collaboration from Step 3 is separate from a persistent handoff. Do not create user-visible chats or send messages into existing chats unless the user asks. At quota exhaustion, save the baton before stopping; the next agent still follows the minimum tier.
-
-When the user authorizes fresh chats for different issues, keep the current issue together. Before a genuine scope change, save a compact handoff with [context-compressor](../context-compressor/SKILL.md), then create the authorized chat with only the relevant objective, constraints, decisions, artifact paths, verification and next step. Carry existing authorization forward; chat creation alone does not authorize adjacent work. Use a fresh chat for a small starting context; a fork retains history. Do not create one chat per worker, assume automatic shared memory, or promise token savings without usage evidence. If creation is unavailable, give the same handoff as a paste-ready block.
-
-## Step 8: Grok pre-flight and banners
-
-Use the bridge's `auto` model routing unless the user requests a specific model. Check connected tools and the monthly budget once per batch. Below 10% remaining, call only on an explicit user request; at zero, finish natively where possible. Follow project limits and keep secrets out of prompts.
-
-Before a paid dispatch, show the model, task and remaining USD budget. Afterward, show actual token/cost consumption and updated budget. Do not claim savings or usage the bridge did not report. Record curated results in the repo; on failure, finish safely with available output and clean up only the relay snapshot this call left.
-
-## Environment details
-
-- **Claude Code:** use available Explore, worker and verifier definitions and model/effort controls; do not assume every installation has the same agents.
-- **Antigravity:** use available research/worker controls; cheaper research models are preferred. Project-specific routing wins.
-- **Codex:** discover canonical skills in `~/.agents/skills` and project `.agents/skills`. Read the project's entrypoint and referenced canonical rules; Claude/Gemini hooks and transcript measurements do not automatically run here. Use native collaboration tools for bounded helpers, retaining parent ownership and reviewing returned work.
-- **Plain chat:** when no delegation tools exist, supply a task spec. Do not pretend a worker was run.
-
-For a plan, show route, bounded tasks, their dependencies and what the brain verifies. For a token audit, identify measured sinks and one concrete fix each; distinguish tool-specific measurements from estimates.
+Value notices are non-blocking and must distinguish historical relative scores/rates from measured workflow cost. Recommend only actually available adequate routes. Preserve historical qualification evidence; role changes never rank-promote models.

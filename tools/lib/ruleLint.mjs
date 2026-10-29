@@ -24,9 +24,9 @@ export function dupCandidates(text) {
 }
 /** Always-on file over MAP_MAX est. tokens with no "Before you" trigger table. */
 export const needsMap = (text) => tok((text || "").length) > MAP_MAX && !/before you/i.test(text || "");
-/** Always-on rule files for a project: global CLAUDE.md + the project's CLAUDE.md, AGENTS.md, GEMINI.md. */
+/** Always-on rules: global Claude/Codex policy + project entrypoints. */
 export function alwaysOnFiles(project, home = os.homedir()) {
-  return [path.join(home, ".claude", "CLAUDE.md"), ...["CLAUDE.md", "AGENTS.md", "GEMINI.md"].map((n) => path.join(project, n))]
+  return [path.join(home, ".claude", "CLAUDE.md"), path.join(home, ".codex", "AGENTS.md"), ...["CLAUDE.md", "AGENTS.md", "GEMINI.md"].map((n) => path.join(project, n))]
     .map((f) => path.resolve(f)).filter((f, i, a) => a.indexOf(f) === i && isFile(f));
 }
 /** Topic (on-demand) rule file: kit rules/topics/*.md or a project's .agents/rules/*.md. */
@@ -52,10 +52,11 @@ export function lintRuleFile(file, project, home = os.homedir()) {
   if (alwaysOn.includes(self) && needsMap(text)) problems.push(`${tok(text.length)} est. tokens (>${MAP_MAX}) and no "Before you" trigger table`);
   if (isTopicFile(self) && !/^Keywords:/m.test(text)) problems.push("topic file has no `Keywords:` line");
   const mine = new Set(dupCandidates(text));
-  // sync.mjs copies the kit's top-level rules/*.md into ~/.claude/CLAUDE.md: that pair is source and copy, not a duplicate
+  // sync source/copy pairs are intentional, including generated Claude/Codex policy blocks.
   const kitCore = path.dirname(self) === path.resolve(home, ".agents", "rules");
+  const generatedPolicy = (file, content) => [path.resolve(home, ".claude", "CLAUDE.md"), path.resolve(home, ".codex", "AGENTS.md")].includes(file) && /<!-- BEGIN agent-kit rules/.test(content || "");
   for (const other of alwaysOn) {
-    if (other === self || (kitCore && other === path.resolve(home, ".claude", "CLAUDE.md"))) continue;
+    if (other === self || (kitCore && generatedPolicy(other, read(other))) || (generatedPolicy(self, text) && generatedPolicy(other, read(other)))) continue;
     const hits = dupCandidates(read(other)).filter((n) => mine.has(n));
     if (hits.length) problems.push(`${hits.length} line(s) duplicated in ${other.replace(home, "~").replace(/\\/g, "/")}, e.g. "${hits[0].length > 60 ? hits[0].slice(0, 57) + "..." : hits[0]}"`);
   }

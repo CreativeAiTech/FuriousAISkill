@@ -1,19 +1,12 @@
 # Escalation and fallback mechanics
 
-Keywords: escalate, escalation, top tier, opus, effort, xhigh, max effort, quota, fallback, DRAFT, below tier, do it anyway, cannot escalate, @claude, decision note
+Keywords: escalate, escalation, high risk, effort, max, quota, fallback, draft, qualification, reviewer, decision
 
-Core rule lives in `~/.agents/rules/token-optimization.md` (decide high, execute low, never guess). Step detail: `model-orchestrator` Step 4.
+Canonical policy: `~/.agents/skills/model-orchestrator/SKILL.md`. Every session remains manager; model fallback never blocks all work.
 
-## Escalate (below the required tier)
-- Resolve the actual model behind a tool alias and use an exact eligible model/effort pair from `model-orchestrator/references/model-authority.md`. High is the minimum; max is permitted when it is needed to pass the benchmark gate. A family name alone grants nothing.
-- For a large Claude escalation, ask before spending substantial shared quota unless already authorized; contained questions use the available subagent controls.
-- Antigravity: use an available benchmark-qualified model and effort, or queue the work for an explicitly assigned capable brain (`@claude` / `@codex`).
-- Codex: for a contained question, use an actually top-ranked subagent with model/effort controls the current tool exposes. Otherwise queue an explicit `@codex` / `@claude` handoff and request a user model change if required. Never assume Claude controls work here or silently change the main model.
-- The top model writes the decision down (decision note or spec). Lower tiers link or quote it and carry it out, never re-decide.
-- A new decision point mid-execution: escalate again.
-
-## Can't escalate (top tier unavailable, out of quota, call failed)
-- Never decide below tier.
-- Hard to reverse: stop, tell the user to wait for the reset or switch models, queue it for a top-tier agent.
-- Reversible: offer a labeled **DRAFT** stating your model, "below required tier", confidence, unknowns. Commit nothing irreversible. Queue a top-tier review.
-- Same handling when the user says "do it anyway".
+- Escalate only the missing ambiguous high-risk decision or qualified review. Name the uncertainty, failing evidence or domain risk, exact scope, required evidence and call/time/spend limit. Use the cheapest adequate actually available model and supported effort; never automatically choose Astra/Max or recursively escalate without bounds.
+- Resolve actual model/effort and applicable benchmark or reviewed task/configuration/risk qualification. Manager role, coarse rank and user draft authorization do not promote authority. High/critical work retains required independent current-result checks.
+- Use only tools the environment exposes; disclose inherited model/effort or unavailable cross-provider dispatch. Do not silently change the main model or global settings. Ask before substantial shared spending only when existing authorization does not cover it.
+- A separate qualified child/sibling/shared manager can review edits it did not author with current diff, requirements and failure evidence; bind approval to the exact revision. Preserve expressly reserved external/named reviewers. Never self-approve or fabricate approval.
+- If unavailable, pause only that decision/review; continue authorized prepared low-risk work and research in an isolated branch. A reversible draft can remain a labeled proposal pending qualified review. Report the missing action, not a session-wide model-switch/yes demand. Existing authorization carries forward.
+- Two identical failures require investigation or a changed bounded route, not another identical retry. Scope growth requires fresh risk and budget triage.

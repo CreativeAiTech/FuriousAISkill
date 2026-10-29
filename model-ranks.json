@@ -25,10 +25,10 @@
     ]
   },
   "allowed": {
-    "top": "Brain candidate only at a verified eligible effort/configuration. No automatic push, merge, deploy or scope expansion.",
-    "mid": "Research, proposals and implementation from an approved specification; brain reviews before integration.",
-    "small": "Research, proposals, checks and mechanical implementation from an approved specification.",
-    "unranked": "Research and proposals; obtain evidence before granting implementation or brain authority."
+    "top": "Manager; qualified action authority only at a verified eligible effort/configuration. No automatic push, merge, deploy or scope expansion.",
+    "mid": "Manager; bounded authorized work and prepared low-risk implementation; qualified final review before integration.",
+    "small": "Manager; research, checks and prepared low-risk implementation with verification.",
+    "unranked": "Manager; bounded research and authorized prepared low-risk execution; no inferred authority or rank promotion."
   },
   "authority": {
     "benchmark": "AA Intelligence Index v4.3.2",

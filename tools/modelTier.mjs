@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
  * Model tier gate (kit port of Crownspire AGT-36/37). Opt-in per project: `"modelGate": true` in .agents/baton.config.json.
- * A project that expects the top model on every main session stops a smaller one before any work: baton.mjs puts a
- * warning at the top of the brief (self-reported `--model`), hooks/model-check.mjs denies the first Claude Code tool
- * call once (real model id read from the transcript). This file ranks model ids and keeps .agents/QUOTA.md.
+ * Every session starts as manager. baton.mjs and hooks/model-check.mjs report action scope without blocking startup.
+ * Model authority remains a separate exact model/effort evidence check. This file keeps legacy tier APIs and QUOTA.md.
  *
  * Rank table, first found wins: <project>/.agents/model-ranks.json → ~/.agents/model-ranks.json → built-in copy.
  * Case-insensitive regexes, checked small → mid → top (so flash-lite is small; \b because "gemini" contains "mini").
- * No match = "unranked": gated like any fallback, and the warning asks the user to rank it once (learn on first sight).
+ * No match = "unranked": no inferred authority; bounded authorized work can still proceed.
  *
  *   node ~/.agents/tools/modelTier.mjs rank <model> [--root <dir>]                         Print rank and tier
  *   node ~/.agents/tools/modelTier.mjs learn <model> --rank top|mid|small [--root <dir>] [--no-push]
@@ -30,9 +29,9 @@ export const DEFAULT_RANKS = {
   ranks: { small: ["^gpt-6-luna$"], mid: ["^gpt-6\\.1-sol$", "^gpt-6-sol$", "^gpt-6\\.1-terra$"], top: [] },
   allowed: {
     top: "Candidate only; exact effort must pass modelAuthority. No automatic publish authority.",
-    mid: "Research, proposals and implementation from an approved specification. No brain decisions.",
-    small: "content, docs, verify runs, tickets with a ready spec only.",
-    unranked: "treated as small until ranked.",
+    mid: "Manager; bounded authorized work and prepared implementation; qualified review for high-risk decisions.",
+    small: "Manager; simple research and prepared low-risk scope with verification.",
+    unranked: "Manager; no inferred authority; bounded research and prepared low-risk scope with verification.",
   },
 };
 
@@ -78,23 +77,17 @@ export function modelTier(model, root, effort) {
 
 export function fallbackWarning(model, root, effort) {
   const rank = modelRank(model, root);
-  const scope = rankTable(root).allowed?.[rank];
-  const learn =
-    rank === "unranked"
-      ? ` New model: also ask "${model} is new to the rank table: top, mid or small?" and record the answer with ` +
-        `\`node ~/.agents/tools/modelTier.mjs learn ${model} --rank <answer>\` (only the user's answer, never your guess).`
-      : "";
   return (
-    `⛔ FALLBACK MODEL: this session runs on \`${model}\` (rank: ${rank}), not a verified brain configuration. ${assess(model, effort, rankTable(root)).reason} ` +
-    `Before ANY work, stop and ask the user: "This project expects the top model; I'm on ${model}. Switch models, or continue in ` +
-    `fallback mode (ready-made specs only, no decisions)?" Existing explicit fallback authorization carries forward. Otherwise continue only on an explicit yes. Learning a coarse rank does not establish benchmark eligibility.` +
-    (scope ? ` Rank ${rank} scope: ${scope}` : "") + learn
+    `MANAGER MODE: reported model \`${model || "unknown"}\` (rank: ${rank}; effort: ${effort || "unverified"}). ` +
+    `Action scope: manage the bounded objective, research, delegate using available controls, and execute authorized prepared low-risk work in an isolated branch with verification. Existing authorization carries forward; no startup approval is required. ` +
+    `Ambiguous high-risk decisions and final approval require applicable qualification and current-result evidence; pause only that missing action. ` +
+    `Benchmark authority: ${assess(model, effort, rankTable(root)).reason} Manager role and coarse rank grant no authority or publish permission.`
   );
 }
 
 
 /**
- * Non-blocking advisory when a session runs on an over-priced / luxury model or effort tier relative to optimal brains.
+ * Non-blocking historical comparison, not measured workflow cost or runtime availability.
  * Returns "" when no nudge applies.
  */
 export function valueAdvisory(model, effort) {
@@ -105,48 +98,48 @@ export function valueAdvisory(model, effort) {
     if (e === "max") {
       return (
         "💡 VALUE NOTICE: You are on `gpt-6-astra` (`max`, 91.38% relative power). This provides **+1.9% more benchmark power** (+1.72 pts) " +
-        "than `gpt-6.1-sol` (`max`, 89.66%) at **5× the token price ($10/$50 vs $2/$10, ~2.55×–5× Codex credit burn)**. " +
-        "For implementation or standard tasks, consider opening a new chat with `gpt-6.1-sol` (`high` or `xhigh`), or stay here only for a top-tier ruling."
+        "than `gpt-6.1-sol` (`max`, 89.66%) at **5× the listed token price ($10/$50 vs $2/$10)**. " +
+        "Historical score/rate comparison only, not measured credits or workflow savings. For prepared edits compare available Sol/Terra low/medium routes; choose only supported adequate efforts with current cost/quota evidence."
       );
     }
     if (e === "xhigh") {
       return (
         "💡 VALUE NOTICE: You are on `gpt-6-astra` (`xhigh`, 89.66% relative power). This provides **+0.0% more power** than `gpt-6.1-sol` (`max`, 89.66%) " +
         "and **+2.0% more** than `gpt-6.1-sol` (`xhigh`, 87.93%) at **5× the token price ($10/$50 vs $2/$10)**. " +
-        "Recommend opening a new chat with `gpt-6.1-sol` (`xhigh` or `high`)."
+        "Historical comparison only. For prepared edits compare available Sol/Terra low/medium routes; actual cost/quota, supported efforts and task quality decide."
       );
     }
     if (e === "high") {
       return (
         "💡 VALUE NOTICE: You are on `gpt-6-astra` (`high`, 87.93% relative power). This provides **+0.0% more power** than `gpt-6.1-sol` (`xhigh`, 87.93%) " +
-        "at **5× the token price ($10/$50 vs $2/$10)**. Recommend opening a new chat with `gpt-6.1-sol` (`high` for daily work, `xhigh` for deep reasoning)."
+        "at **5× the token price ($10/$50 vs $2/$10)**. Historical comparison only; consider available Sol/Terra low/medium for prepared edits after checking quality, supported effort and current cost/quota."
       );
     }
     return (
       "💡 VALUE NOTICE: You are on `gpt-6-astra` ($10/$50 per 1M tokens, **5× the base rate** of `gpt-6.1-sol` at $2/$10 for **0%–1.9% score delta**). " +
-      "Unless this session requires a top-tier tie-breaker at `max`, open a new chat with `gpt-6.1-sol` (`high` or `xhigh`)."
+      "Historical comparison only; manager role never requires Astra/Max. Choose the cheapest adequate available model and supported effort from task/risk and current cost/quota evidence."
     );
   }
-  if (/fable/i.test(m)) {
+  if (m === "claude-fable-5-1") {
     return (
       `💡 VALUE NOTICE: You are on \`${model}\` (91.38% max relative power, $10/$50 per 1M tokens). This provides **−1.8% to −8.6% less benchmark score** ` +
       "than `claude-opus-5-5` (`high` 93.10%, `max` 100.00% at $4/$20) at **2.5× the cost**, and costs **5× more** than `claude-sonnet-5-5` (`max` 96.55% at $2/$10). " +
-      "Recommend opening a new chat with `claude-opus-5-5` (`medium`/`high`) or `claude-sonnet-5-5`."
+      "Historical comparison only; choose an adequate available worker at low/medium effort for prepared work. Rates do not establish workflow savings or qualify a decision."
     );
   }
-  if (/opus/i.test(m) && (e === "max" || e === "xhigh")) {
+  if (m === "claude-opus-5-5" && (e === "max" || e === "xhigh")) {
     const score = e === "max" ? "100.00%" : "96.55%";
     const gain = e === "max" ? "+7.4%" : "+3.7%";
     return (
       `💡 VALUE NOTICE: You are on \`${model}\` (\`${e}\`, ${score} relative power). \`${e}\` provides **${gain} more benchmark power** than \`claude-opus-5-5\` (\`high\`, 93.10%) ` +
-      "while burning **~2×–3× more thinking output tokens** ($20/1M), and costs **2× the base rate** of `claude-sonnet-5-5` (`max` 96.55% at $2/$10). " +
-      "For routine implementation, consider `claude-opus-5-5` (`medium`/`high`) or `claude-sonnet-5-5`."
+      "and costs **2× the listed base rate** of `claude-sonnet-5-5` (`max` 96.55% at $2/$10). " +
+      "Historical comparison only; token consumption and workflow savings are unmeasured. For prepared work compare adequate available low/medium worker routes."
     );
   }
-  if ((/argon/i.test(m) || /gemini[\w.\s-]*\bpro\b/i.test(m)) && e === "high") {
+  if (m === "gemini-4-argon" && e === "high") {
     return (
-      `💡 VALUE NOTICE: You are on \`${model}\` (\`high\`, 91.38% relative power, $2/$10 intro rate). \`high\` burns **~2× more thinking tokens** than API-default \`medium\` ` +
-      "and costs **2.67× the base rate** of `gemini-3.8-flash` ($0.75/$3.75). Reserve `high` for top-tier architecture/rulings; use `medium` or `gemini-3.8-flash` for routine work."
+      `💡 VALUE NOTICE: Historical comparison: \`${model}\` (\`high\`, 91.38% relative score, $2/$10 intro rate) ` +
+      "has **2.67× the listed base rate** of `gemini-3.8-flash` ($0.75/$3.75). Check current prices/quota, actual availability and adequate supported effort; neither token consumption nor workflow savings was measured."
     );
   }
   return "";
@@ -156,8 +149,8 @@ export function valueAdvisory(model, effort) {
 const HEADER = [
   "# Model availability (auto-written by ~/.agents/tools/modelTier.mjs)",
   "",
-  "> Last model each tool's main session ran on. `fallback` = the top model wasn't available (quota or mistake):",
-  "> the brief warns and lists only tickets with a ready `.agents/tasks/<ID>/spec.md`. Don't hand-edit rows.",
+  "> Last reported model per tool. Legacy `fallback` means benchmark authority was not established for the reported configuration; it does not describe quota or manager eligibility.",
+  "> Every session manages; action-specific qualification and authorization remain separate. Don't hand-edit rows.",
   "",
   "| Tool | Model | Tier | Seen | Source |",
   "| :--- | :--- | :--- | :--- | :--- |",
@@ -265,7 +258,8 @@ async function cli(argv) {
     root = findRoot(process.cwd());
   }
   if (cmd === "rank" && model) {
-    console.log(`${model}: routing rank ${modelRank(model, root)}, decision tier ${modelTier(model, root, flag("effort"))} (${ranksFile(root) || "built-in table"})`);
+    console.log(fallbackWarning(model, root, flag("effort")));
+    console.log(`Routing rank ${modelRank(model, root)}; legacy decision tier ${modelTier(model, root, flag("effort"))} (${ranksFile(root) || "built-in table"})`);
   } else if (cmd === "learn" && model) {
     console.log(await learnModel(model, flag("rank"), { root, push: !flag("no-push") }));
   } else {

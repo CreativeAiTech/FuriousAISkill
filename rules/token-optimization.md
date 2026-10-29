@@ -1,49 +1,33 @@
 # Global Orchestration & Token Rules (all projects, all tools)
 
-Project rules (AGENTS.md, CLAUDE.md, GEMINI.md) refine these and win on conflict, except that the default top-tier areas (`model-orchestrator` Step 4) are a floor: projects may add areas, and lowering one needs a written reason in the project's rules. Delegate when the user or applicable project instructions authorize it; installation alone does not grant cross-chat messaging or external-action permission.
+Generic manager policy lives in `model-orchestrator`; projects contribute domain risks, verifier commands and ownership. Direct user instructions and existing authorization carry forward. Installation alone does not authorize cross-chat messaging or external actions.
 
 | Before you… | Read |
 | :--- | :--- |
+| choose agents/models, delegate, implement or review | `~/.agents/skills/model-orchestrator/SKILL.md` |
 | write or edit an agent rule (CLAUDE.md, AGENTS.md, GEMINI.md, kit rules) | `~/.agents/rules/topics/writing-rules.md` |
-| escalate a top-tier decision, hit a quota/model fallback, or the user says "do it anyway" | `~/.agents/rules/topics/escalation.md` |
-| checkpoint a long chat, size a task, or run a context check (checkpoint, context, long chat, CONTEXT.md, agContext) | `~/.agents/rules/topics/checkpoints.md` |
-| change these rules, audit token spend, or act on the weekly hygiene report (tokens, hygiene) | `~/.agents/rules/topics/measure-and-hygiene.md` |
-| rename the session (session title, rename, "continue" resume, `C-` prefix) | `~/.agents/rules/topics/session-naming.md` |
+| escalate a specific high-risk decision/review, hit a quota/model fallback | `~/.agents/rules/topics/escalation.md` |
+| checkpoint a long chat, size a task, run a context check | `~/.agents/rules/topics/checkpoints.md` |
+| change these rules, audit token spend, act on weekly hygiene | `~/.agents/rules/topics/measure-and-hygiene.md` |
+| rename a session | `~/.agents/rules/topics/session-naming.md` |
 
-## 1. Orchestrator-first
-The main session coordinates work; it acts as the **brain** only when its exact model and effort pass `model-orchestrator/references/model-authority.md`. Other sessions research, propose and implement approved specs. Before the first tool call on a request, state the route in one line, e.g. `Route: scout(haiku) → plan → worker(sonnet) → verifier(haiku)`.
+## 1. Manager in every session
 
-| Work | Who |
-| :--- | :--- |
-| **Trivial**: answer from loaded context, ≤2 quick tool calls, one-line edit | Brain inline |
-| **Collect**: search, read 3+ files, logs, git history, web | Small read-only subagent; returns paths, lines, facts |
-| **Mechanical or well-specified edits**, any number of files | Worker with a tight spec (goal, files, constraints, done-when) |
-| **Verify**: typecheck, tests, lint, build | Small verifier; pass/fail in ≤3 lines |
-| **Judgment**: architecture, unknown-cause bugs, ambiguity, security, final review | Brain specs, worker implements, brain reviews the **diff** |
+Every chat starts as MANAGER regardless of model: own the bounded objective, triage risk, select economical available models and supported efforts, delegate bounded work, track evidence and reassess scope growth. Role does not grant authority. Unknown/lower models can manage, research and execute authorized prepared low-risk work in an isolated branch; gate only the ambiguous high-risk decision or final approval that lacks qualification/evidence. No session-start stop/yes loop.
 
-- Run independent subagents in parallel, each with only the files it needs.
-- A worker fails twice → redo one tier up, or the brain takes it. Same error twice → stop and report.
-- **Hard work needs the top tier** (a top-ranked brain, high effort): architecture or design, anything costly to reverse, a bug unexplained after one real attempt, the same error twice, conflicting constraints, security, data-loss or money risk, plus any area the project adds. Check the model you're *actually* on before each such decision: tools silently fall back to a smaller model when quota runs out.
-- **Decide high, execute low, never guess.** Below the required tier, escalate (how: escalation.md). The top model writes the decision down; lower tiers carry it out, never re-decide. A new decision point mid-execution → escalate again.
-- **Can't escalate? Never decide below tier.** Hard to reverse → stop and queue it. Reversible → labeled DRAFT only (escalation.md).
-- If the user has not chosen a model, pick the smallest available model that does the job well. Respect explicit choices and project model gates; never claim to change the main model yourself.
-- **Prefer a cheaper capable tier.** A bounded same-tier helper may reduce latency or isolate context; state that purpose, never assume token savings. Every spawn gets a tight spec, targeted reads and a stop point (report back after ~30 calls). Native helpers stay under the parent ticket; persistent cross-tool work uses the shared backlog. Use only exposed model/effort controls; otherwise helpers inherit the model.
+State the actual bounded route; no fixed scout/brain/worker/verifier chain or gratuitous per-phase spawns. Batch cohesive read/edit/verify work in one worker. Managers may do tiny coordination/spot-check reads; substantive discovery/editing delegates when available. Without delegation, remain manager and execute within bounded capability and verification. Use only exposed tools/model/effort controls, disclose inheritance when controls are absent, and never claim unsupported cross-provider dispatch or self-change the main model.
 
-| Tool | Small (collect, verify) | Mid (implement) | Brain |
-| :--- | :--- | :--- | :--- |
-| Claude Code | `Explore` / `verifier` (haiku) | `worker` (sonnet) | main session at a benchmark-qualified model and effort |
-| Antigravity | `research` / `flash_lite` where available | inline when main is Flash; `flash` worker under a Pro main | main session, only on an actually top-ranked model |
-| Codex | available native helper; inherits model unless an override is supported | bounded worker with disjoint files or read-only scope | main session, only on an actually top-ranked model |
-
-Agent choice across tools, task specs, handoff: `model-orchestrator`.
+Choose the cheapest adequate available route: simple search small/low, prepared edits mid/low-medium, harder reasoning/review only when evidence or risk requires it. Escalate a specific uncertainty/failing check with scope and cost limits. No automatic Astra/Max, unbounded recursion/spend or unsupported savings claims. Preserve modelAuthority qualification, independent review, OS permissions, secrets, ownership and publish authorization; see the canonical skill for action gates and exact-revision approval.
 
 ## 2. Bounded tool use
-- Read targeted line ranges, not whole files. Never read lockfiles, `*.map`, binaries, or build output (`dist/`, `build/`, `out/`, `node_modules/`).
-- Cap noisy output at the source (`| head -n 30`, `| Select-Object -First 30`, `--quiet` / `-q`).
+
+- Read targeted ranges; avoid lockfiles, maps, binaries and build output unless necessary to the objective.
+- Cap noisy output at the source. Give each worker owned paths, acceptance checks and a stop point.
 
 ## 3. Concise replies
-Show diffs, short snippets, or links to changed lines; never echo whole files.
+
+Show compact evidence, diffs or links; never echo whole files.
 
 ## 4. Checkpoint and naming
-About 20+ turns with heavy tool output, or right after a milestone: checkpoint with `context-compressor` and start fresh (prefer it over `/compact`).
-Once you know the task, rename the session `<HHMM>-<ID> <short task>` (local 24h, ticket ID if any), e.g. `1930-PET-07 fox mask redo`.
+
+After a milestone or about 20+ heavy turns, checkpoint with `context-compressor`; recommend a fresh chat when useful. Once known, name the session `<HHMM>-<ID> <short task>` (local time, ticket ID if any).

@@ -9,8 +9,8 @@
  *
  *   node ~/.agents/tools/baton.mjs init [--project <name>] [--push push-master|commit-only|none]   Write templates (never overwrites)
  *   node ~/.agents/tools/baton.mjs [--agent <name>] [--model <id>] [--effort <effort>] [--hook]   Print the session brief (--hook: never fails)
- *       --model: the main session's exact model id. With "modelGate": true in baton.config.json a non-top model gets a
- *       stop-and-ask warning as the brief's first line and sees only tickets with .agents/tasks/<ID>/spec.md (tools/modelTier.mjs).
+ *       --model: reported main-session model id. With "modelGate": true the brief reports action scope and authority
+ *       evidence; every session starts as manager and ready tickets remain visible (tools/modelTier.mjs).
  *   node ~/.agents/tools/baton.mjs log --agent <name> --done "<what>" [--next "<what>"]   Append a baton line, renew your leases
  *   node ~/.agents/tools/baton.mjs focus --task "<t>" --owner <agent> --status <s> [--next] [--files] [--verify] [--force]
  *   node ~/.agents/tools/baton.mjs focus --clear
@@ -28,7 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { modelTier, recordModel, readQuota, fallbackWarning, valueAdvisory } from "./modelTier.mjs";
+import { recordModel, readQuota, fallbackWarning, valueAdvisory } from "./modelTier.mjs";
 
 export const DEFAULTS = {
   project: "",
@@ -44,7 +44,7 @@ export const DEFAULTS = {
   humanTags: ["user"], // tickets any agent may claim on the human's behalf
   maxLogEntries: 15,
   command: "node ~/.agents/tools/baton.mjs", // how the brief tells agents to call this tool
-  modelGate: false, // true: a non-top main model stops and asks first (tools/modelTier.mjs, hooks/model-check.mjs)
+  modelGate: false, // legacy option: include model/authority scope advisory (never a session-start tool block)
 };
 const AUTO_BATON = ".agents/auto-baton.json"; // written by the kit's auto-baton hook
 const CONFIG_FILE = ".agents/baton.config.json";
@@ -246,16 +246,12 @@ function autoBatonEntries(ctx) {
 function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false, effort = "") {
   const out = [];
   const me = agentTag(ctx, agent);
-  // Model gate (opt-in): the warning goes first so a model that skims still sees it. Claude Code's hook input has no
+  // Model scope advisory (opt-in): role is universal; authority is action-specific. Claude Code's hook input has no
   // model; there hooks/model-check.mjs reads it from the transcript at the first tool call instead.
   const gate = Boolean(ctx.cfg.modelGate);
   if (typeof model !== "string") model = "";
-  const fallback = gate && modelTier(model, ctx.root, effort) === "fallback";
   if (gate && model) recordModel(ctx.root, me || "unknown-tool", model, "--model flag", effort);
-  if (fallback) out.push(fallbackWarning(model, ctx.root, effort), "");
-  else if (gate && !model && !fromHook) {
-    out.push("⚠️ Model not reported. Rerun with `--model <your exact model id> --effort <your actual effort>`. Not the top model → stop and ask the user before any work.", "");
-  }
+  out.push(gate ? fallbackWarning(model, ctx.root, effort) : "MANAGER MODE: own the bounded objective; choose economical available delegation, verify evidence, and gate only actions requiring qualification or authorization.", "");
   const advisory = valueAdvisory(model, effort);
   if (advisory) out.push(advisory, "");
   const stateText = readText(ctx.stateFile);
@@ -268,7 +264,7 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
   out.push(`# ${ctx.cfg.project || path.basename(ctx.root)} Session Brief (${today()})`, "");
   const seenFallback = gate ? readQuota(ctx.root).filter((r) => r.tier === "fallback") : [];
   if (seenFallback.length) {
-    out.push(`- Quota: last session ran a fallback model on ${seenFallback.map((r) => `${r.tool} (${r.model}, ${r.seen})`).join(", ")} (.agents/QUOTA.md)`, "");
+    out.push(`- Reported configurations without benchmark authority: ${seenFallback.map((r) => `${r.tool} (${r.model}, ${r.seen})`).join(", ")} (.agents/QUOTA.md; not measured quota or a manager restriction)`, "");
   }
 
   const branch = git(ctx, ["rev-parse", "--abbrev-ref", "HEAD"]) || "unknown";
@@ -349,10 +345,8 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
       for (const t of ready.slice(0, 8)) out.push(clip(t));
       out.push(`- _Tip: pass \`--agent <${Object.keys(ctx.cfg.agents).join("|")}>\` to see only your tickets and what blocks them._`);
     } else {
-      // Fallback model: only tickets with a ready dossier spec (decided work, no rulings left).
-      const hasSpec = (t) => fs.existsSync(path.join(ctx.root, ".agents", "tasks", t.id, "spec.md"));
-      const mine = ready.filter((t) => t.tag === me && (!fallback || hasSpec(t)));
-      if (fallback) out.push("- _Fallback mode: listing only tickets with a ready `.agents/tasks/<ID>/spec.md`._");
+      // Visibility and ownership are independent of model authority; triage each action's risk.
+      const mine = ready.filter((t) => t.tag === me);
       const urgentOthers = ready.filter((t) => t.urgent && t.tag !== me);
       out.push(`### Ready for you (@${me}), in pick order`);
       if (mine.length) for (const t of mine.slice(0, 6)) out.push(clip(t));
