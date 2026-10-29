@@ -29,23 +29,36 @@ export function priceCodexModel(model, registry) {
   if (!model || typeof model !== "string" || !registry?.entries) return null;
   const m = model.trim().toLowerCase();
   if (m === "codex-auto-review" || m.includes("guardian") || m.includes("auto-review")) return null;
-  let entry = registry.entries.find(e => e.model && e.model.toLowerCase() === m);
-  if (!entry) {
-    if (m.startsWith("gpt-6.1-sol")) entry = registry.entries.find(e => e.model === "gpt-6.1-sol");
-    else if (m.startsWith("gpt-6-sol")) entry = registry.entries.find(e => e.model === "gpt-6-sol");
-    else if (m === "gpt-6" || (m.startsWith("gpt-6-") && !m.includes("luna") && !m.includes("mini") && !m.includes("terra") && !m.includes("astra"))) {
-      entry = registry.entries.find(e => e.model === "gpt-6.1-sol");
-    }
-    else if (m.startsWith("gpt-6-astra")) entry = registry.entries.find(e => e.model === "gpt-6-astra");
-    else if (m.startsWith("gpt-6.1-terra") || m.startsWith("gpt-6-terra")) entry = registry.entries.find(e => e.model === "gpt-6.1-terra");
-    else if (m.startsWith("gpt-6-luna") || m.startsWith("gpt-6-mini") || m.startsWith("gpt-6-flash")) entry = registry.entries.find(e => e.model === "gpt-6-luna");
-  }
+  const entry = registry.entries.find(e => e.model && e.model.toLowerCase() === m);
   if (!entry || !entry.rates) return null;
   return { input: entry.rates.input, cachedInput: entry.rates.cachedInput, output: entry.rates.output, matchedModel: entry.model };
 }
 
+export function toModelValueCall(session, { service = "direct-api-standard-text", maxPromptTokens = 272000, cacheWriteCostUsd = 0, otherCostUsd = 0 } = {}) {
+  if (!session || typeof session !== "object") throw new Error("Valid session object required");
+  if (session.coverage !== "observed") throw new Error(`Cannot export session with coverage "${session.coverage}" to modelValue: ambiguous or partial data cannot establish complete cost`);
+  if (!session.model) throw new Error("Session missing exact model identifier");
+  const cfg = session.configurations?.find(c => c.effort);
+  const effort = cfg?.effort || "high";
+  const obs = session.observed;
+  if (!obs || obs.input_tokens === null || obs.output_tokens === null) {
+    throw new Error("Session has incomplete or ambiguous counters");
+  }
+  return {
+    model: session.model,
+    effort,
+    service,
+    inputTokens: obs.input_tokens,
+    cachedInputTokens: obs.cached_input_tokens || 0,
+    outputTokens: obs.output_tokens,
+    maxPromptTokens,
+    cacheWriteCostUsd,
+    otherCostUsd,
+  };
+}
+
 // Only retain metadata and counters. Message/tool payloads are never returned.
-export async function readCodexUsage({ project, codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), pricesPath = null, since = 0, until = Date.now() }) {
+export async function readCodexUsage({ project, codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex"), pricesPath = null, exactCwd = false, since = 0, until = Date.now() }) {
   const root = path.join(codexHome, "sessions");
   const diagnostics = { files: 0, unreadableFiles: 0, unreadableDirectories: 0, malformedRecords: 0, unsupportedRecords: 0, excludedFiles: 0, duplicateObservations: 0, worktreeFiles: 0, subdirFiles: 0 };
   const sessions = new Map();
@@ -90,7 +103,7 @@ export async function readCodexUsage({ project, codexHome = process.env.CODEX_HO
               reasons.add("conflicting_metadata"); break;
             }
             meta = nextMeta;
-            if (!isProjectCwd(meta.cwd, project)) break;
+            if (exactCwd ? (normalized(meta.cwd) !== normalized(project)) : !isProjectCwd(meta.cwd, project)) break;
           } else if (record.type === "turn_context") {
             configurations.push({ timestamp: time(record.timestamp), model: typeof p?.model === "string" ? p.model : null, effort: typeof p?.effort === "string" ? p.effort : null });
           } else if (record.type === "event_msg" && p?.type === "token_count") {
@@ -111,7 +124,7 @@ export async function readCodexUsage({ project, codexHome = process.env.CODEX_HO
         lines?.close();
         stream?.destroy();
       }
-      if (!meta || !isProjectCwd(meta.cwd, project)) { diagnostics.excludedFiles++; continue; }
+      if (!meta || (exactCwd ? (normalized(meta.cwd) !== normalized(project)) : !isProjectCwd(meta.cwd, project))) { diagnostics.excludedFiles++; continue; }
       const normMetaCwd = normalized(meta.cwd);
       const normProj = normalized(project);
       if (normMetaCwd !== normProj) {
@@ -182,17 +195,21 @@ export async function readCodexUsage({ project, codexHome = process.env.CODEX_HO
         if (configurations[ci].model) { sModel = configurations[ci].model; break; }
       }
     }
-    const rates = s.role === "guardian" ? null : priceCodexModel(sModel, modelPricesRegistry);
+    const hasAmbiguousCounters = s.reasons.size > 0 || !observed || observed.input_tokens === null || observed.output_tokens === null;
+    const rates = (s.role === "guardian" || hasAmbiguousCounters) ? null : priceCodexModel(sModel, modelPricesRegistry);
     let sessionCost = null;
-    if (rates && observed) {
-      const inp = observed.input_tokens || 0;
+    if (rates && observed && !hasAmbiguousCounters) {
+      const inp = observed.input_tokens;
       const cached = observed.cached_input_tokens || 0;
-      const out = observed.output_tokens || 0;
+      const out = observed.output_tokens;
       const uncached = Math.max(0, inp - cached);
       sessionCost = (uncached * rates.input + cached * rates.cachedInput + out * rates.output) / 1e6;
     }
     const priced = sessionCost !== null;
-    const unpricedReason = priced ? null : (s.role === "guardian" ? "guardian_role" : (!sModel ? "no_model" : `unpriced_model_${sModel}`));
+    const unpricedReason = priced ? null : (
+      hasAmbiguousCounters ? "ambiguous_or_partial_counters" :
+      (s.role === "guardian" ? "guardian_role" : (!sModel ? "no_model" : `unpriced_model_${sModel}`))
+    );
     result.push({
       id: s.id,
       parentId: s.parentId,
@@ -227,7 +244,7 @@ export async function readCodexUsage({ project, codexHome = process.env.CODEX_HO
   if (diagnostics.malformedRecords || diagnostics.unsupportedRecords) reasons.push("unsupported_or_malformed_records");
   if (result.some(s => s.coverage === "partial")) reasons.push("partial_session_history");
   return { project: path.resolve(project), window: { since, until }, coverage: !available ? "unavailable" : reasons.length ? "partial" : result.some(s => s.acceptedObservations) ? "observed" : "no_matching_usage", reasons, roles, sessions: result, diagnostics,
-    scope: "Normalized cwd and child directories/worktrees (cwd === project || cwd.startsWith(project + '/')). Observed does not establish complete task coverage.",
+    scope: exactCwd ? "Exact normalized cwd only; child directories and worktrees are not implicitly included. Observed does not establish complete task coverage." : "Normalized cwd and child directories/worktrees (cwd === project || cwd.startsWith(project + '/')). Observed does not establish complete task coverage.",
     counterSemantics: "Per-session reported counters; parent/worker overlap unknown. Cached input and reasoning output are subsets, not extra tokens. No unique task-wide total.",
     cost: pricedCount > 0 ? totalModeledCost : null,
     modeledCostUsd: pricedCount > 0 ? totalModeledCost : null,

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { readCodexUsage, codexRole } from "./codexUsage.mjs";
+import { readCodexUsage, codexRole, priceCodexModel, toModelValueCall } from "./codexUsage.mjs";
 
 const ts = n => new Date(n * 1000).toISOString();
 const u = n => ({ input_tokens: n * 8, cached_input_tokens: n * 2, cache_write_input_tokens: 0, output_tokens: n * 2, reasoning_output_tokens: n, total_tokens: n * 10 });
@@ -104,8 +104,9 @@ test("roles use source and exact normalized cwd excludes descendants/worktrees",
   for (const [id, source] of [["main", "vscode"], ["worker", { subagent: { thread_spawn: {} } }], ["guardian", { subagent: { other: "guardian" } }], ["unknown", "future"]]) f.write(id, [meta(id, "c:\\fixture\\project\\", source), event(2, 2)]);
   f.write("child", [meta("child", "C:/fixture/project/child"), event(2, 2)]);
   f.write("worktree", [meta("worktree", "C:/fixture/project-worktree"), event(2, 2)]);
-  const r = await f.read(); assert.deepEqual(r.roles, { main: 1, worker: 1, guardian: 1, unknown: 1 }); assert.equal(r.diagnostics.excludedFiles, 2);
+  const r = await f.read({ exactCwd: true }); assert.deepEqual(r.roles, { main: 1, worker: 1, guardian: 1, unknown: 1 }); assert.equal(r.diagnostics.excludedFiles, 2);
   assert.equal(codexRole({ parent_thread_id: "parent" }), "unknown");
+  const rSub = await f.read(); assert.deepEqual(rSub.roles, { main: 2, worker: 1, guardian: 1, unknown: 1 }); assert.equal(rSub.diagnostics.subdirFiles, 1);
 });
 test("old damaged sessions retain diagnostics without inflating current role counts", async t => {
   const f = fixture(t), missing = event(2, 5); delete missing.payload.info.total_token_usage.output_tokens;
@@ -124,4 +125,44 @@ test("absent/unreadable sources and synthetic message contents cannot leak", asy
   const original = fs.createReadStream;
   try { fs.createReadStream = () => { throw new Error("fixture denied"); }; const denied = await f.read(); assert.equal(denied.diagnostics.unreadableFiles, 1); assert.equal(denied.coverage, "partial"); }
   finally { fs.createReadStream = original; }
+});
+test("AGT-80: priceCodexModel requires exact matches and never guesses by family substring", () => {
+  const reg = { entries: [{ model: "gpt-6.1-sol", rates: { input: 2, cachedInput: 0.1, output: 10 } }] };
+  assert.equal(priceCodexModel("gpt-6.1-sol", reg)?.input, 2);
+  assert.equal(priceCodexModel("GPT-6.1-SOL", reg)?.input, 2);
+  assert.equal(priceCodexModel("gpt-6.1-sol-preview", reg), null);
+  assert.equal(priceCodexModel("gpt-6", reg), null);
+  assert.equal(priceCodexModel("gpt-6-astra", reg), null);
+});
+test("AGT-80: ambiguous/partial counters cannot become complete cost and toModelValueCall bridges clean data", async t => {
+  const f = fixture(t);
+  const pPath = path.join(f.root, "prices.json");
+  fs.writeFileSync(pPath, JSON.stringify({ entries: [{ model: "gpt-6.1-sol", rates: { input: 2, cachedInput: 0.1, output: 10 } }] }));
+  f.write("partial-session", [
+    meta("partial-session", "C:/fixture/project", "vscode"),
+    { type: "turn_context", timestamp: ts(1), payload: { model: "gpt-6.1-sol", effort: "high" } },
+    event(2, 2),
+    event(3, 1), // counter decrease -> partial
+  ]);
+  const r = await f.read({ pricesPath: pPath });
+  const s = r.sessions[0];
+  assert.equal(s.priced, false);
+  assert.equal(s.modeledCostUsd, null);
+  assert.equal(s.unpricedReason, "ambiguous_or_partial_counters");
+  assert.throws(() => toModelValueCall(s), /Cannot export session with coverage/);
+
+  // Clean session
+  f.write("clean-session", [
+    meta("clean-session", "C:/fixture/project", "vscode"),
+    { type: "turn_context", timestamp: ts(1), payload: { model: "gpt-6.1-sol", effort: "high" } },
+    event(2, 2),
+  ]);
+  const r2 = await f.read({ pricesPath: pPath });
+  const clean = r2.sessions.find(x => x.id === "clean-session");
+  assert.equal(clean.priced, true);
+  assert.ok(clean.modeledCostUsd > 0);
+  const call = toModelValueCall(clean);
+  assert.equal(call.model, "gpt-6.1-sol");
+  assert.equal(call.effort, "high");
+  assert.equal(call.inputTokens, 16);
 });
