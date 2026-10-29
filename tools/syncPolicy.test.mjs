@@ -55,3 +55,60 @@ test('policy-only refuses opt-in mutation and relative fixture destinations', ()
     assert.notEqual(result.status,0);
   }
 });
+
+test('managed blocks preserve raw CRLF outside bytes and append without changing existing text', t => {
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'furious-policy-bytes-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const codex=path.join(root,'.codex/AGENTS.md');
+  const claude=path.join(root,'.claude/CLAUDE.md');
+  fs.mkdirSync(path.dirname(codex),{recursive:true});
+  fs.mkdirSync(path.dirname(claude),{recursive:true});
+  const prefix='# CUSTOM prefix  \r\nKeep\r\n';
+  const suffix='\r\n# CUSTOM suffix  \r\nNo newline';
+  fs.writeFileSync(codex,prefix+'<!-- BEGIN agent-kit rules (old) -->\r\nold\r\n<!-- END agent-kit rules -->'+suffix);
+  const noMarker='Custom no markers\r\nNo trailing newline  ';
+  fs.writeFileSync(claude,noMarker);
+  const run=()=>spawnSync(process.execPath,[fileURLToPath(new URL('../sync.mjs',import.meta.url)),'--policy-only','--target-home',root],{encoding:'utf8',timeout:15000});
+  const first=run();
+  assert.equal(first.status,0,first.stderr);
+  const result=fs.readFileSync(codex,'utf8');
+  const appended=fs.readFileSync(claude,'utf8');
+  assert.ok(result.startsWith(prefix));
+  assert.ok(result.endsWith(suffix));
+  assert.equal(result.replace(/\r\n/g,'' ).includes('\n'),false);
+  assert.ok(appended.startsWith(noMarker+'\r\n\r\n<!-- BEGIN'));
+  assert.equal(run().status,0);
+  assert.equal(fs.readFileSync(codex,'utf8'),result);
+  assert.equal(fs.readFileSync(claude,'utf8'),appended);
+});
+
+test('malformed markers fail closed and preflight both managed destinations', t => {
+  const begin='<!-- BEGIN agent-kit rules (old) -->';
+  const end='<!-- END agent-kit rules -->';
+  const pair=begin+'\r\nold\r\n'+end;
+  const fixtures=[
+    begin+'\r\nCUSTOM_OUTSIDE_KEEP\r\n'+pair,
+    end,
+    pair+'\r\n'+pair,
+    begin+'\r\n'+pair+'\r\n'+end,
+    begin+'\r\nCUSTOM_OUTSIDE_KEEP',
+    '<!-- BEGIN agent-kit rules broken\r\nCUSTOM_OUTSIDE_KEEP\r\n'+pair,
+    '<!-- BEGIN ~/.agents/rules -->\nold\n'+end,
+  ];
+  for(const [i,fixture] of fixtures.entries()) {
+    const root=fs.mkdtempSync(path.join(os.tmpdir(),'furious-policy-invalid-'));
+    t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+    const codex=path.join(root,'.codex/AGENTS.md');
+    const claude=path.join(root,'.claude/CLAUDE.md');
+    fs.mkdirSync(path.dirname(codex),{recursive:true});
+    fs.mkdirSync(path.dirname(claude),{recursive:true});
+    const valid='CUSTOM_CLAUDE\r\n'+pair+'\r\nFOOTER';
+    fs.writeFileSync(codex,fixture);
+    fs.writeFileSync(claude,valid);
+    const result=spawnSync(process.execPath,[fileURLToPath(new URL('../sync.mjs',import.meta.url)),'--policy-only','--target-home',root],{encoding:'utf8',timeout:15000});
+    assert.notEqual(result.status,0,`fixture ${i}`);
+    assert.match(result.stderr,/Malformed managed rule markers/);
+    assert.deepEqual(fs.readFileSync(codex),Buffer.from(fixture));
+    assert.deepEqual(fs.readFileSync(claude),Buffer.from(valid));
+  }
+});

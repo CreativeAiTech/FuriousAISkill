@@ -186,6 +186,12 @@ function syncSkills() {
 
 function syncRules() {
   const files = fs.existsSync(SRC_RULES) ? fs.readdirSync(SRC_RULES).filter((f) => f.endsWith(".md")).sort() : [];
+  // Validate both managed destinations before mutating either one (or rule mirrors).
+  const body = files.map((f) => read(path.join(SRC_RULES, f)).trim()).join("\n\n");
+  const plans = [
+    planRuleBlock(CLAUDE_MD, body),
+    planRuleBlock(CODEX_MD, read(path.join(SRC_RULES, "token-optimization.md")).trim()),
+  ];
 
   // Antigravity: one generated file per rule.
   for (const f of files) {
@@ -207,23 +213,35 @@ function syncRules() {
   }
 
   // Shared canonical policy, managed blocks only. Codex discovers skills directly in ~/.agents/skills.
-  const body = files.map((f) => read(path.join(SRC_RULES, f)).trim()).join("\n\n");
-  syncRuleBlock(CLAUDE_MD, body);
-  syncRuleBlock(CODEX_MD, read(path.join(SRC_RULES, "token-optimization.md")).trim());
+  for (const plan of plans) syncRuleBlock(plan);
 }
 
-function syncRuleBlock(destination, body) {
-  const block = body ? `${BLOCK_BEGIN}\n\n${body}\n\n${BLOCK_END}` : "";
-  const current = fs.existsSync(destination) ? read(destination) : "";
-  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Matches the current block (any BEGIN text with the prefix) and the legacy ~/.agents block, so exactly one block remains.
-  const re = new RegExp(`${esc(BLOCK_BEGIN_PREFIX)}[^\\n]*?-->[\\s\\S]*?${esc(BLOCK_END)}|${esc(LEGACY_BLOCK_BEGIN)}[\\s\\S]*?${esc(LEGACY_BLOCK_END)}`, "g");
-  let placed = false;
-  const next = re.test(current)
-    ? current.replace(re, () => (placed ? "" : ((placed = true), block)))
-    : block ? `${current}${current ? (current.endsWith("\n") ? "\n" : "\n\n") : ""}${block}\n` : current;
+function planRuleBlock(destination, body) {
+  const current = fs.existsSync(destination) ? fs.readFileSync(destination, "utf8") : "";
+  const newline = current.includes("\r\n") ? "\r\n" : "\n";
+  const block = body ? `${BLOCK_BEGIN}\n\n${body}\n\n${BLOCK_END}`.replace(/\r?\n/g, newline) : "";
+  // Tokenize first: a non-greedy block regex can silently consume an orphan BEGIN
+  // and custom text before a later valid pair. Reject every ambiguous structure.
+  const tokens = [...current.matchAll(/<!-- (BEGIN|END) (agent-kit rules|~\/\.agents\/rules)[^\r\n]*?(?:-->|(?=\r?$))/gm)];
+  if (tokens.length) {
+    const [begin, end] = tokens;
+    const valid = tokens.length === 2 && begin[1] === "BEGIN" && end[1] === "END"
+      && begin[2] === end[2] && begin[0].endsWith("-->")
+      && end[0] === (end[2] === "agent-kit rules" ? BLOCK_END : LEGACY_BLOCK_END);
+    if (!valid) throw new Error(`Malformed managed rule markers in ${destination}; destination preserved`);
+    return { destination, current, next: current.slice(0, begin.index) + block + current.slice(end.index + end[0].length) };
+  }
+  const next = block ? `${current}${current ? (current.endsWith("\n") ? newline : newline + newline) : ""}${block}${newline}` : current;
+  return { destination, current, next };
+}
+
+function syncRuleBlock({ destination, current, next }) {
   if (next !== current) {
-    if (next) writeIfChanged(destination, next);
+    if (next) {
+      fs.mkdirSync(path.dirname(destination), { recursive: true });
+      fs.writeFileSync(destination, next, "utf8");
+      report.written.push(rel(destination));
+    }
     else if (fs.existsSync(destination)) (fs.rmSync(destination), report.removed.push(rel(destination)));
   }
 }
