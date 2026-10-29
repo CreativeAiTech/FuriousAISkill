@@ -346,15 +346,14 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
       out.push(`- _Tip: pass \`--agent <${Object.keys(ctx.cfg.agents).join("|")}>\` to see only your tickets and what blocks them._`);
     } else {
       // Visibility and ownership are independent of model authority; triage each action's risk.
-      const mine = ready.filter((t) => t.tag === me);
-      const urgentOthers = ready.filter((t) => t.urgent && t.tag !== me);
+      // Any agent takes any ready ticket; tags are hints. Only human-tagged tickets are reserved for the user.
+      const mine = ready.filter((t) => !ctx.cfg.humanTags.includes(t.tag));
       out.push(`### Ready for you (@${me}), in pick order`);
       if (mine.length) for (const t of mine.slice(0, 6)) out.push(clip(t));
-      else out.push(`- _Nothing ready for @${me}. Don't take another agent's ticket or guess its decision: tell the user what you wait on (below) and stop._`);
-      for (const t of urgentOthers) out.push(`- URGENT for @${t.tag || "untagged"}: **${t.id}** (not yours; tell the user)`);
-      const waiting = open.filter((t) => t.box === " " && t.tag === me && !t.needs.every((n) => doneIds.has(n))).sort(pickOrder);
+      else out.push(`- _Nothing ready for @${me}: tell the user what you wait on (below) and stop._`);
+      const waiting = open.filter((t) => t.box === " " && !ctx.cfg.humanTags.includes(t.tag) && !t.needs.every((n) => doneIds.has(n))).sort(pickOrder);
       if (waiting.length) {
-        out.push(`### Your tickets waiting on others`);
+        out.push(`### Tickets waiting on others`);
         for (const t of waiting.slice(0, 6)) {
           const freeText = t.needs.some((n) => !ctx.idExact.test(n));
           const blockers = freeText
@@ -364,10 +363,8 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
         }
         if (waiting.length > 6) out.push(`- …and ${waiting.length - 6} more`);
       }
-      const othersReady = ready.filter((t) => t.tag !== me);
-      const counts = {};
-      for (const t of othersReady) counts[t.tag || "untagged"] = (counts[t.tag || "untagged"] || 0) + 1;
-      if (othersReady.length) out.push(`- Ready for other agents (not yours): ${Object.entries(counts).map(([k, n]) => `@${k} ${n}`).join(", ")}`);
+      const humanReady = ready.filter((t) => ctx.cfg.humanTags.includes(t.tag));
+      if (humanReady.length) out.push(`- Reserved for the user: ${humanReady.length} ready (${humanReady.map((t) => t.id).join(", ")})`);
     }
     out.push("");
   }
@@ -446,8 +443,6 @@ function updateFocus(ctx, flags) {
     const problems = [];
     const unmet = ticket ? ticket.needs.filter((n) => !doneIds.has(n)) : [];
     if (unmet.length) problems.push(`${claimId} needs ${unmet.map((n) => `${n} (@${tickets.find((t) => t.id === n)?.tag ?? "?"})`).join(", ")}, not Done yet`);
-    const owner = agentTag(ctx, flags.owner);
-    if (ticket && ticket.tag && owner && ticket.tag !== owner && !ctx.cfg.humanTags.includes(ticket.tag)) problems.push(`${claimId} is tagged @${ticket.tag}, not @${owner}`);
     if (problems.length) {
       console.error(`Refusing to set focus: ${problems.join("; ")}.`);
       console.error(`Pick your next ready ticket (\`${ctx.cmd} --agent <you>\`), or add --force only if the user told you to take it.`);
@@ -705,7 +700,7 @@ function backlogTemplate(name, cmd, leaseDays, agents) {
 > **Claim before you start**: \`${cmd} claim <ID> --agent <you>\` refuses tickets another agent holds and adds
 > \`claimed: <agent> until <date>\` (a ${leaseDays}-day lease, renewed by every \`log\` you write). Expired leases show as STALE.
 > Also \`block <ID> --reason "…"\`, \`release <ID>\`, \`done <ID> --commit <sha>\` (moves it under _Done_).
-> **Agent tags**: ${tags}.
+> **Agent tags** (optional hints; any agent may take any ticket, \`@user\` is reserved): ${tags}.
 
 ## Now
 

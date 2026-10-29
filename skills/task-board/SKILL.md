@@ -19,7 +19,7 @@ Agents don't share chat memory, so the repo is the memory. Two committed files:
 | File | Purpose |
 | :--- | :--- |
 | `.agents/STATE.md` | **The baton**: Current Focus, Needs User Decision, the newest handoff lines |
-| `.agents/BACKLOG.md` | **The queue**: one bounded ticket per line, tagged for an agent |
+| `.agents/BACKLOG.md` | **The queue**: one bounded ticket per line, optional agent tag as a hint |
 | `.agents/baton.config.json` | Settings: paths, lease days, push mode, ticket ID pattern, agent names |
 | `.agents/auto-baton.json` | Gitignored. Written by the optional auto-baton hook for sessions that ended without a baton |
 
@@ -48,9 +48,8 @@ the same tool: two Claude Code sessions in parallel worktrees collide just as ea
 2. Pick, in this order:
    1. The user's request in this message, which always wins.
    2. Current Focus, if it is `in-progress`/`blocked`, the user said "continue", **and you own it**. The brief says "Not yours" otherwise.
-   3. Any open `urgent` ticket, else your ready ticket (all `needs` Done) with the lowest `target`. The brief lists only yours.
-   4. Nothing ready for you → tell the user which ticket waits on which agent (the brief lists it) and stop.
-      Never take another agent's ticket or make its decision to get unblocked.
+   3. Any open `urgent` ticket, else a ready ticket (all `needs` Done) with the lowest `target`. Any agent may take any unclaimed ticket; the brief lists every ready ticket except `@user` ones.
+   4. Nothing ready → tell the user which ticket waits on what (the brief lists it) and stop. Never make a blocked decision to get unblocked.
 3. Skip anything under **In progress (claimed)**: someone holds it and may still be running. A **STALE** claim
    (lease expired) can be claimed normally; say so in your log line. `--force` only after the user says so.
 4. Claim, then set the focus. Start work only after `claim` succeeds:
@@ -59,14 +58,14 @@ the same tool: two Claude Code sessions in parallel worktrees collide just as ea
    baton focus --task "ABC-12 <title>" --owner <you> --status in-progress --files "<paths>" --verify "<command>"
    ```
    `claim` refuses a ticket another agent holds (locally or on the remote). `focus --status in-progress` refuses when
-   the ticket's `needs` aren't Done or it is tagged for another agent.
+   the ticket's `needs` aren't Done.
    **Hidden dependency** found mid-task: add a self-contained ticket for the agent who must act, add its ID to your
    ticket's `needs:`, run `baton block <ID> --reason "waits on <NEW-ID>"`, and pick your next ready ticket.
 
 ## 2. During the session
 
-- One ticket at a time. Something unrelated? Add a new ticket with `from: <ID>` and the best agent tag. Don't fix it now.
-- Need another agent's strength? Queue a ticket for it instead of asking the user to copy context between tools.
+- One ticket at a time. Something unrelated? Add a new ticket with `from: <ID>` and an optional agent tag as a hint. Don't fix it now.
+- Need a tool you lack (e.g. image generation)? Queue a ticket with a needed-tool hint instead of asking the user to copy context between tools.
 
 ## 3. Session end (always, even mid-task)
 

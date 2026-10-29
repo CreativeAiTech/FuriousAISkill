@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Manage bounded work in every session, select economical available models and efforts, delegate, verify evidence, and preserve cross-tool handoffs.
 metadata:
-  version: 1.7.1
+  version: 1.8.0
 ---
 
 # Model Orchestrator
@@ -49,6 +49,8 @@ Escalation is a specific missing decision/review, with uncertainty or failing ev
 
 Compare the current diff and verification evidence against acceptance requirements. Independence means a different author, whatever the tool. Default route: delegate research, rule on what it surfaces, delegate the edit and checks, then review the child's diff yourself; that review is independent. Spawn a separate higher-tier reviewer only when (a) you authored the diff in a critical area, or (b) your rank is not qualified for the decision. Auditing another agent's closed work is a separate gate (see the project's handoff rules) and does not apply to reviewing your own child's diff. A separate reviewer may be a child/sibling or shared manager if it did not author those edits, receives the current diff, requirements and failure evidence, and has applicable qualification. Record approval against the exact revision (and diff identity for uncommitted changes); changed edits invalidate that approval. A manager cannot self-approve. Preserve explicitly reserved independent external/named-owner reviewer requirements; orchestration does not replace them.
 
+After any review, the brain gives every actionable finding an owner: an in-chat subagent; a linked worktree session it starts itself (at most 3 at once, separate files, merged one at a time); its own decision; or one user question for a real trade-off. One user go-ahead covers the whole batch. A review never ends on an "open items" list.
+
 ### Completion gate (before MR or merge)
 
 After checks pass, the manager classifies the finished diff before opening an MR or integrating:
@@ -62,9 +64,9 @@ Publishing still requires applicable existing user authorization, intended desti
 
 ## Cross-tool and special routes
 
-Persistent cross-tool work uses the project's shared board and ownership with a self-contained task and verification. Create/send messages to user-visible chats only when the user explicitly authorizes it. If tools are unavailable, provide the bounded handoff; never claim it was dispatched. At quota exhaustion save the baton before stopping.
+Persistent cross-tool work uses the project's shared board with a self-contained task and verification. Every agent is equal: any agent takes any unclaimed ticket, and a live claim only means don't collide. Ticket agent tags are optional hints; `@user` stays reserved for the user. Create/send messages to user-visible chats only when the user explicitly authorizes it. If tools are unavailable, provide the bounded handoff; never claim it was dispatched. At quota exhaustion save the baton before stopping.
 
-Keep project pet-art/image routes. Creative candidates should fit the brief and cost; do not treat general benchmarks as UI/UX or creative quality evidence. For explicit efficiency experiments, read [research-triage.md](references/research-triage.md).
+Check tool access (e.g. image generation) when work is handed out, not as a standing role. Creative candidates should fit the brief and cost; do not treat general benchmarks as UI/UX or creative quality evidence. For explicit efficiency experiments, read [research-triage.md](references/research-triage.md).
 
 For connected Grok, use bridge `auto` unless the user specifies a model, check budget once per batch, and show model/task/budget before paid dispatch plus actual usage afterward. Below 10% remaining call only on explicit request; at zero finish with available capabilities. Do not call externally for repo-answerable questions or include secrets. Clean up only this call's relay artifacts.
 
