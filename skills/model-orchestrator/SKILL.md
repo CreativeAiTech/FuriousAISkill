@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Manage bounded work in every session, select economical available models and efforts, delegate, verify evidence, and preserve cross-tool handoffs.
 metadata:
-  version: 1.5.0
+  version: 1.6.0
 ---
 
 # Model Orchestrator
@@ -13,7 +13,7 @@ Generic orchestration lives here; projects supply domain risks, verifier command
 
 ## Choose a bounded route
 
-State the actual route briefly, with model/effort where controllable, purpose, scope and stop point. There is no mandatory scout → brain → worker → verifier chain. Do not spawn one agent per phase. Batch cohesive discovery, edits and verification in one worker when useful. The manager may do tiny coordination and spot-check reads; delegate substantive discovery/editing when tools are available. If delegation is unavailable, remain manager and execute within bounded capabilities with verification; escalate only the missing action.
+State the actual route briefly, with model/effort where controllable, purpose, scope and stop point. There is no mandatory scout → brain → worker → verifier chain. For one task, a substantive phase (research, implement, test) may run in its own subagent so the manager keeps receipts and diffs, not raw tool output; batch small phases, or phases that need the same context, into one worker. The manager may do tiny coordination and spot-check reads; delegate substantive discovery/editing when tools are available. If delegation is unavailable, remain manager and execute within bounded capabilities with verification; escalate only the missing action.
 
 | Work | Economical starting point |
 | :--- | :--- |
@@ -46,6 +46,15 @@ Escalation is a specific missing decision/review, with uncertainty or failing ev
 ## Review and integration
 
 Compare the current diff and verification evidence against acceptance requirements. A separate reviewer may be a child/sibling or shared manager if it did not author those edits, receives the current diff, requirements and failure evidence, and has applicable qualification. Record approval against the exact revision (and diff identity for uncommitted changes); changed edits invalidate that approval. A manager cannot self-approve. Preserve explicitly reserved independent external/named-owner reviewer requirements; orchestration does not replace them.
+
+### Completion gate (before MR or merge)
+
+After checks pass, the manager classifies the finished diff before opening an MR or integrating:
+
+- **Bounded**: within the manager's qualification, no high-risk area, no new decision (executing an already-written decision or spec counts as bounded). The manager reviews the child-authored diff and integrates under existing authorization; a diff the manager wrote itself needs a separate reviewer.
+- **Critical**: touches a high-risk area or makes a new decision there. Do not ask the user first: dispatch a qualified brain reviewer with an evidence dossier (requirements, exact revision and diff, check output, the open trade-off). With no working dispatcher, push the branch unmerged and queue a persistent review handoff.
+
+The brain picks one: **approve** and integrate in-session; **split** the critical part into a separate task and keep this task bounded (hold or revert that part); or **decide** in a decision note or spec and hand execution back to a cheaper worker. A qualified brain manager resolves critical work itself, but still needs a separate reviewer for edits it authored.
 
 Publishing still requires applicable existing user authorization, intended destination, current qualified approval and passing checks. No role or benchmark grants secret access, OS permissions, ownership changes, force-push, merge or deploy authority. Do executable preparation before asking for concrete final approval where needed.
 
