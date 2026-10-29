@@ -41,7 +41,7 @@ export const DEFAULTS = {
   ticketId: "[A-Z]+-\\d+",
   // Backlog tag → the --agent names that work it. Unlisted names map to themselves.
   agents: { claude: ["claude", "claude-code"], gemini: ["gemini", "antigravity"] },
-  humanTags: ["user"], // tickets any agent may claim on the human's behalf
+  humanTags: ["user"], // tags reserved for the human: claim/focus refuse them unless --force
   maxLogEntries: 15,
   command: "node ~/.agents/tools/baton.mjs", // how the brief tells agents to call this tool
   modelGate: false, // legacy option: include model/authority scope advisory (never a session-start tool block)
@@ -442,6 +442,7 @@ function updateFocus(ctx, flags) {
     const doneIds = new Set(tickets.filter((t) => !t.open).map((t) => t.id));
     const problems = [];
     const unmet = ticket ? ticket.needs.filter((n) => !doneIds.has(n)) : [];
+    if (ticket && ctx.cfg.humanTags.includes(ticket.tag)) problems.push(`${claimId} is @${ticket.tag} (reserved for the user's own decision, secret or taste)`);
     if (unmet.length) problems.push(`${claimId} needs ${unmet.map((n) => `${n} (@${tickets.find((t) => t.id === n)?.tag ?? "?"})`).join(", ")}, not Done yet`);
     if (problems.length) {
       console.error(`Refusing to set focus: ${problems.join("; ")}.`);
@@ -590,6 +591,11 @@ function ticketCommand(ctx, cmd, positional, flags) {
   if (cmd === "claim") {
     if (/^\s*- \[x\]/.test(line)) {
       console.error(`${realId} is already done.`);
+      process.exit(1);
+    }
+    const ticketTag = line.match(/`@([\w-]+)`/)?.[1] ?? "";
+    if (ctx.cfg.humanTags.includes(ticketTag) && !flags.force) {
+      console.error(`Refusing to claim: ${realId} is @${ticketTag} (reserved for the user's own decision, secret or taste). Use --force only if the user told you to take it.`);
       process.exit(1);
     }
     let remoteLine = "";

@@ -34,3 +34,22 @@ test('focus on a ticket tagged for another agent is not refused', t => {
   assert.equal(res.status, 0, res.stderr);
   assert.doesNotMatch(res.stderr, /tagged/);
 });
+
+test('focus in-progress on an @user ticket is refused unless --force', t => {
+  const root = project(t);
+  const args = ['focus', '--task', 'TST-02 decide it', '--owner', 'x', '--status', 'in-progress'];
+  const res = run(root, ...args);
+  assert.notEqual(res.status, 0);
+  assert.match(res.stderr, /Refusing to set focus: TST-02 is @user/);
+  const forced = run(root, ...args, '--force');
+  assert.equal(forced.status, 0, forced.stderr);
+});
+
+test('claim on an @user ticket is refused unless --force', t => {
+  const root = project(t);
+  const res = run(root, 'claim', 'TST-02', '--agent', 'x');
+  assert.notEqual(res.status, 0);
+  assert.match(res.stderr, /Refusing to claim: TST-02 is @user/);
+  const forced = run(root, 'claim', 'TST-02', '--agent', 'x', '--force');
+  assert.equal(forced.status, 0, forced.stderr);
+});
