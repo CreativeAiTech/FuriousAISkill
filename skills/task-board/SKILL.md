@@ -91,7 +91,7 @@ Write the baton **before** your final message, while you still have context:
 ## 4. Context running low
 
 Write the baton first, then tell the user: "Baton saved in `.agents/STATE.md`. Open <other tool> and say **continue**."
-For decisions plus reasoning, `context-compressor` can also write `CONTEXT.md`; STATE.md stays the pointer.
+For decisions plus reasoning, write a decision note; STATE.md stays the pointer.
 
 ## Push modes (`push` in the config)
 

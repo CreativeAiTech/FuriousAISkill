@@ -2,7 +2,7 @@
 // Antigravity context meter: measures this project's own context numbers from its Antigravity (Gemini) chats, then reports
 // how far the newest chat has grown, so the agent can checkpoint on measured numbers instead of a turn count.
 // Usage: node agContext.mjs [--project <dir>] [--days 14] [--refresh] [--json]   (hidden test flags: --chat <uuid>, --dir <conversations dir>)
-// Writes ~/.agents/state/context-profile/antigravity-<slug>.json (daily cache; Claude-side twin is contextProfile.mjs).
+// Writes ~/.agents/state/context-profile/antigravity-<slug>.json (daily cache). Antigravity-only: Claude Code and Codex compact natively (FAS-118).
 // Reads temp copies of the chat DBs, never the live file. Never prints chat content. Any failure → one fallback line, exit 0.
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +17,7 @@ const flag = (n) => argv.includes("--" + n);
 const days = Number(arg("days", 14)) || 14;
 const WINDOW = 256000;
 
-// Same thresholds policy as contextProfile.mjs.
+// Thresholds: growth budget capped at 60k (cost), shrunk to fit 80% of the window minus one heavy turn.
 const COST_HARD = 60000, COST_SOFT = 30000, SAFE = 0.8, MIN_HARD = 20000, MIN_SOFT = 10000;
 const pct = (a, p) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p * (s.length - 1) + 0.5))]; };
 const k = (n) => Math.round(n / 1000);
