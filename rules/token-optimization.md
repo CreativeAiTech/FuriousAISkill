@@ -4,9 +4,9 @@ Generic manager policy lives in `model-orchestrator`; projects contribute domain
 
 | Before you… | Read |
 | :--- | :--- |
-| choose agents/models, delegate, implement or review | `~/.agents/skills/model-orchestrator/SKILL.md` |
+| choose agents/models, delegate, implement or review, escalate (stuck, missing rights) | `~/.agents/skills/model-orchestrator/SKILL.md` |
 | write or edit an agent rule (CLAUDE.md, AGENTS.md, GEMINI.md, kit rules) | `~/.agents/rules/topics/writing-rules.md` |
-| escalate a specific high-risk decision/review, hit a quota/model fallback | `~/.agents/rules/topics/escalation.md` |
+| hit a quota or model fallback (model unavailable) | `~/.agents/rules/topics/escalation.md` |
 | checkpoint a long chat, size a task, run a context check | `~/.agents/rules/topics/checkpoints.md` |
 | change these rules, audit token spend, act on weekly hygiene | `~/.agents/rules/topics/measure-and-hygiene.md` |
 | rename a session | `~/.agents/rules/topics/session-naming.md` |

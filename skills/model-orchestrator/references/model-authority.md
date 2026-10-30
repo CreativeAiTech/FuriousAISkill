@@ -36,14 +36,14 @@ It prints JSON (model, effort, brain, code name, tools, score, bar, tier, permis
 
 `model-ranks.json` holds a `models` map (exact id to code name and tools) and a `brains` map per tool. The `brains` map only labels eligible brains and never grants brain status.
 
-| Tool | Preferred brain (cheapest that qualifies, use by default) | Overkill (escalate only for a hard call) |
+| Tool | Preferred brain (cheapest that qualifies, use by default) | Overkill (only after a preferred brain failed) |
 | :--- | :--- | :--- |
 | `claude-code` | `opus-5.5` medium | `opus-5.5` xhigh and max; `fable-5.1` high, xhigh and max |
 | `codex` | `sol-6.1` high | `sol-6.1` max; `astra-6` medium, high, xhigh and max |
 | `antigravity` | `argon-4` high | none |
 | `grok-mcp` | none | none |
 
-A non-brain escalates to the preferred brain of its tool; a brain escalates to an overkill entry only when the decision justifies the cost.
+Who escalates to which tier: [SKILL.md](../SKILL.md) § Qualification and action gates.
 
 ## Permissions
 
