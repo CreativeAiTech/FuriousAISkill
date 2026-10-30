@@ -153,7 +153,8 @@ function tierLabels(table, tools, kind) {
 }
 
 /**
- * Brain verdict plus derived code name, tier and permissions. The verdict comes only from `assess`;
+ * Brain verdict plus derived code name, tier and permissions. escalateTo: a non-brain gets its tools' preferred
+ * brains, a preferred or eligible brain gets overkill, an overkill brain gets [] (escalation stops there). The verdict comes only from `assess`;
  * the preferred/overkill listing and the price file never grant or remove brain status.
  */
 export function brainCheck(model, effort, table, prices, options) {
@@ -169,7 +170,7 @@ export function brainCheck(model, effort, table, prices, options) {
   const delegates = delegateTo(table, model, prices);
   const permissions = brain
     ? { decide: true, review: "any", merge: "with-user-authorization", pushMain: true,
-        forcePushMain: "force-with-lease-and-owner-ok", delegateTo: delegates, escalateTo: tierLabels(table, tools, "overkill") }
+        forcePushMain: "force-with-lease-and-owner-ok", delegateTo: delegates, escalateTo: tier === "overkill" ? [] : tierLabels(table, tools, "overkill") }
     : { decide: false, review: "bounded", merge: false, pushMain: "bookkeeping-fast-forward-only",
         forcePushMain: false, delegateTo: delegates, escalateTo: tierLabels(table, tools, "preferred") };
   return {

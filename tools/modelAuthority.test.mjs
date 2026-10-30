@@ -294,6 +294,15 @@ test("permissions are derived: brain shape", () => {
   assert.deepEqual(p.delegateTo, [...p.delegateTo].sort());
 });
 
+test("escalateTo: overkill brains escalate no further; Codex overkill lists non-max Astra first", () => {
+  assert.deepEqual(verdict("claude-opus-5-5", "max").permissions.escalateTo, []);
+  assert.deepEqual(verdict("gpt-6-astra", "max").permissions.escalateTo, []);
+  assert.equal(verdict("gpt-6-astra", "max").tier, "overkill");
+  assert.deepEqual(verdict("gpt-6.1-sol", "high").permissions.escalateTo, ["astra-6@medium", "astra-6@high", "astra-6@xhigh", "sol-6.1@max", "astra-6@max"]);
+  assert.deepEqual(verdict("gemini-4-argon", "high").permissions.escalateTo, []);
+  assert.deepEqual(verdict("grok-4-7", "high").permissions.escalateTo, []);
+});
+
 test("permissions are derived: non-brain shape", () => {
   const result = verdict("gpt-6.1-sol", "medium");
   assert.equal(result.brain, false);
