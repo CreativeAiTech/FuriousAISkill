@@ -19,6 +19,8 @@ Every chat starts as MANAGER, in every tool, model and effort. Route, delegation
 
 - Read targeted ranges; avoid lockfiles, maps, binaries and build output unless necessary to the objective.
 - Cap noisy output at the source. Give each worker owned paths, acceptance checks and a stop point.
+- Searches, multi-file reads and diff comparisons go to `explorer`; check/test runs go to `verifier`. The manager makes at most ~2 discovery calls itself, only to spot-check a delegate's claim.
+- When delegating to these, pass `model`/`effort` low (this is the explicit instruction Claude Code needs to set a subagent's effort).
 
 ## 3. Concise replies
 
