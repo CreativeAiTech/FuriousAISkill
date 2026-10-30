@@ -1,6 +1,6 @@
 # Results
 
-What the kit changed in one real project, measured by the kit's own token report.
+What the kit's routing is estimated to save on one real project, from the kit's own token report.
 
 - **Measured on**: 2026-10-30, kit version 1.9.0
 - **Window**: Oct 28 to Oct 30, 2026, one game project
@@ -41,8 +41,10 @@ Delegating work to cheaper models saved a modeled $30.38 over 40 Claude Code spa
 | general-purpose / sonnet | 2 | $0.89 | $2.09 | $1.21 |
 | claude-code-guide / haiku | 1 | $0.02 | $0.81 | $0.79 |
 | general-purpose / opus | 7 | $13.09 | $16.50 | $3.41 |
+| worker / opus | 1 | $2.27 | $2.96 | $0.70 |
+| **total** | **40** | | | **$30.38** |
 
-Inline estimate is what the same work would cost in the main session. One more row (worker / opus, 1 spawn, $0.70) is left out; the full total is $30.38 over 40 spawns. Antigravity delegation saved $3.04 over 22 subagent runs.
+Inline estimate is what the same work would cost in the main session. Antigravity delegation saved $3.04 over 22 subagent runs.
 
 ## What works
 
@@ -53,7 +55,7 @@ Inline estimate is what the same work would cost in the main session. One more r
 ## Not yet working, or not measured
 
 - **Late checkpoints**: carrying long context cost $4.96, more than the kit overhead. Checkpoints should come earlier.
-- **Opus-on-Opus subagents** save little ($3.41 on 7 spawns). Same-tier workers pay a cold start.
+- **Opus subagents under an Opus session** save little: $4.11 on $15.36 of spend over 8 spawns.
 - **Antigravity subagents**: 94% of their spend runs at the main model's price. Research should go to flash-lite, which saved $1.20 where it was used.
 - **Routing outcomes**: n=0. None of 32 implementation spawns carried a GATE line, so whether routing gave correct results is unmeasured.
 - **Codex**: coverage is partial, and no cost or quota savings are reported.
