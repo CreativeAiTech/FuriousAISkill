@@ -1,5 +1,5 @@
 {
-  "_doc": "Coarse routing ranks are not brain authority. Exact model AND effort must pass tools/modelAuthority.mjs. IDs here are local registry keys; verify endpoint IDs and evaluated configuration before dispatch. Project overrides without authority evidence do not grant brain authority.",
+  "_doc": "Coarse routing ranks are not brain authority. Brain = `node tools/modelAuthority.mjs check <model> --effort <effort>`: the exact model AND effort must score at or above authority.bar.score. IDs here are local registry keys; verify endpoint IDs and evaluated configuration before dispatch. `brains` only orders preferred vs overkill among eligible brains and never grants brain status; `models` holds code names and tools. Permissions are derived in code, never read from this file. Project overrides without authority evidence do not grant brain authority.",
   "ranks": {
     "small": [
       "^gpt-6-luna$",
@@ -33,11 +33,14 @@
   "authority": {
     "benchmark": "AA Intelligence Index v4.3.2",
     "checkedAt": "2026-10-27",
-    "maxAgeDays": 30,
     "leaderScore": 58,
-    "thresholdPercent": 90,
     "leaderSource": "https://artificialanalysis.ai/models/claude-opus-5-5",
-    "method": "100 * score / leaderScore; relative benchmark points, not IQ or percentage of real-world intelligence. Published raw scores are rounded. Gate uses the recorded scores without rounding normalized values.",
+    "bar": {
+      "percent": 85,
+      "ofLeaderScore": 58,
+      "score": 49.3
+    },
+    "method": "Brain bar = 85% of the leader score on this exact benchmark version, frozen as the absolute score in bar.score (85 * 58 / 100 = 49.3). A new leader on the same benchmark version does not move it; only a benchmark version change does. No expiry. The score at the exact listed model and effort alone decides; no inheritance between efforts; default and unreported efforts never qualify. relativeScore = 100 * score / leaderScore is display only (relative benchmark points, not IQ). Published raw scores are rounded; the gate uses recorded scores without rounding.",
     "entries": [
       {
         "provider": "OpenAI",
@@ -312,5 +315,170 @@
         "configuration": "reasoning effort not reported; no brain authority"
       }
     ]
+  },
+  "models": {
+    "gpt-6-astra": {
+      "codeName": "astra-6",
+      "tools": [
+        "codex"
+      ]
+    },
+    "gpt-6.1-sol": {
+      "codeName": "sol-6.1",
+      "tools": [
+        "codex"
+      ]
+    },
+    "gpt-6-sol": {
+      "codeName": "sol-6",
+      "tools": [
+        "codex"
+      ]
+    },
+    "gpt-6.1-terra": {
+      "codeName": "terra-6.1",
+      "tools": [
+        "codex"
+      ]
+    },
+    "gpt-6-luna": {
+      "codeName": "luna-6",
+      "tools": [
+        "codex"
+      ]
+    },
+    "claude-opus-5-5": {
+      "codeName": "opus-5.5",
+      "tools": [
+        "claude-code"
+      ]
+    },
+    "claude-fable-5-1": {
+      "codeName": "fable-5.1",
+      "tools": [
+        "claude-code"
+      ]
+    },
+    "claude-sonnet-5-5": {
+      "codeName": "sonnet-5.5",
+      "tools": [
+        "claude-code"
+      ]
+    },
+    "claude-haiku-5-5": {
+      "codeName": "haiku-5.5",
+      "tools": [
+        "claude-code"
+      ]
+    },
+    "gemini-4-argon": {
+      "codeName": "argon-4",
+      "tools": [
+        "antigravity"
+      ]
+    },
+    "gemini-3.8-flash": {
+      "codeName": "flash-3.8",
+      "tools": [
+        "antigravity"
+      ]
+    },
+    "grok-4-7": {
+      "codeName": "grok-4.7",
+      "tools": [
+        "grok-mcp"
+      ]
+    },
+    "deepseek-v4.1-flash-1017": {
+      "codeName": "deepseek-4.1-flash",
+      "tools": []
+    },
+    "qwen3.8-max-0902": {
+      "codeName": "qwen-3.8-max",
+      "tools": []
+    },
+    "muse-wonder-full": {
+      "codeName": "muse-wonder",
+      "tools": []
+    },
+    "kimi-k3-1-pro": {
+      "codeName": "kimi-k3.1",
+      "tools": []
+    }
+  },
+  "brains": {
+    "claude-code": {
+      "preferred": [
+        {
+          "model": "claude-opus-5-5",
+          "effort": "medium"
+        }
+      ],
+      "overkill": [
+        {
+          "model": "claude-opus-5-5",
+          "effort": "xhigh"
+        },
+        {
+          "model": "claude-opus-5-5",
+          "effort": "max"
+        },
+        {
+          "model": "claude-fable-5-1",
+          "effort": "high"
+        },
+        {
+          "model": "claude-fable-5-1",
+          "effort": "xhigh"
+        },
+        {
+          "model": "claude-fable-5-1",
+          "effort": "max"
+        }
+      ]
+    },
+    "codex": {
+      "preferred": [
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "high"
+        }
+      ],
+      "overkill": [
+        {
+          "model": "gpt-6.1-sol",
+          "effort": "max"
+        },
+        {
+          "model": "gpt-6-astra",
+          "effort": "medium"
+        },
+        {
+          "model": "gpt-6-astra",
+          "effort": "high"
+        },
+        {
+          "model": "gpt-6-astra",
+          "effort": "xhigh"
+        },
+        {
+          "model": "gpt-6-astra",
+          "effort": "max"
+        }
+      ]
+    },
+    "antigravity": {
+      "preferred": [
+        {
+          "model": "gemini-4-argon",
+          "effort": "high"
+        }
+      ],
+      "overkill": []
+    },
+    "grok-mcp": {
+      "preferred": [],
+      "overkill": []
+    }
   }
 }

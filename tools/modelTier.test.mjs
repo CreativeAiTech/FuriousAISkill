@@ -24,10 +24,12 @@ function project(t, table = structuredClone(shipped)) {
 test('integrated tier separates exact effort despite a candidate family rank', t => {
   const root=project(t);
   assert.equal(modelRank('gpt-6-astra',root),'top');
-  for (const effort of [undefined,'low','medium','high','xhigh','ultra']) {
+  for (const effort of [undefined,'low','ultra']) {
     assert.equal(modelTier('gpt-6-astra',root,effort),'fallback');
   }
-  assert.equal(modelTier('gpt-6-astra',root,'max'),'top');
+  for (const effort of ['medium','high','xhigh','max']) {
+    assert.equal(modelTier('gpt-6-astra',root,effort),'top');
+  }
   assert.equal(modelTier('claude-sonnet-5-5',root,'high'),'fallback');
   assert.equal(modelTier('claude-sonnet-5-5',root,'max'),'top');
   assert.equal(modelTier('gpt-6.1-sol',root,'max'),'fallback');
@@ -53,19 +55,19 @@ test('quota records effort transitions without conflating family and eligibility
   const root=project(t);
   assert.equal(recordModel(root,'codex','gpt-6-astra','test','max'),true);
   assert.equal(readQuota(root)[0].tier,'top');
-  assert.equal(recordModel(root,'codex','gpt-6-astra','test','high'),true);
+  assert.equal(recordModel(root,'codex','gpt-6-astra','test','low'),true);
   assert.equal(readQuota(root)[0].tier,'fallback');
-  assert.match(readQuota(root)[0].source,/effort=high/);
+  assert.match(readQuota(root)[0].source,/effort=low/);
 });
 
 test('baton brief reports manager scope while preserving exact effort authority', t => {
   const root=project(t);
   const ctx=makeContext(root,loadConfig(root));
-  const high=buildBrief(ctx,'codex',{},'gpt-6-astra',false,'high');
+  const high=buildBrief(ctx,'codex',{},'gpt-6-astra',false,'low');
   const max=buildBrief(ctx,'codex',{},'gpt-6-astra',false,'max');
   assert.match(high,/MANAGER MODE/);
   assert.match(max,/MANAGER MODE/);
-  assert.equal(modelTier('gpt-6-astra',root,'high'),'fallback');
+  assert.equal(modelTier('gpt-6-astra',root,'low'),'fallback');
   assert.equal(modelTier('gpt-6-astra',root,'max'),'top');
 });
 

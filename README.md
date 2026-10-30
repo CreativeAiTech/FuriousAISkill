@@ -46,15 +46,16 @@ Projects layer their own specifics on top (e.g. Etherium's `AGENTS.md` and `.age
 
 ## Benchmark-based model authority
 
-The reusable policy and sourced comparison are in [model authority](skills/model-orchestrator/references/model-authority.md). Each model/effort pair is scored independently against the same benchmark version. The legacy benchmark route requires at least 90% of the leader and high effort or above. An explicit reviewed qualification can instead grant judgment for an exact project/task/configuration/risk; it does not promote a model globally. Every session manages independently of this gate; unknown/lower configurations can research and execute authorized prepared low-risk scope, while ambiguous high-risk decisions/final approval need applicable evidence. The 0–100 relative index is not IQ. Supported efforts, sourced API prices and cost per accepted task are described in [model economics](skills/model-orchestrator/references/model-economics.md). `node tools/modelValue.mjs <scenario.json>` compares offline workflow prices; it does not dispatch models or predict quota.
+The reusable policy and sourced comparison are in [model authority](skills/model-orchestrator/references/model-authority.md). Each model/effort pair is scored independently against the same benchmark version. The benchmark route requires the exact listed effort to score at least the frozen bar of 49.3 points (85% of the 58-point leader on AA v4.3.2); the score alone decides, with no effort floor and no expiry, and `default` or unreported efforts never qualify. An explicit reviewed qualification can instead grant judgment for an exact project/task/configuration/risk; it does not promote a model globally. Every session manages independently of this gate; unknown/lower configurations can research and execute authorized prepared low-risk scope, while ambiguous high-risk decisions/final approval need applicable evidence. The 0–100 relative index is not IQ. Supported efforts, sourced API prices and cost per accepted task are described in [model economics](skills/model-orchestrator/references/model-economics.md). `node tools/modelValue.mjs <scenario.json>` compares offline workflow prices; it does not dispatch models or predict quota.
 
 ```sh
+node tools/modelAuthority.mjs check claude-opus-5-5 --effort medium
+node tools/modelAuthority.mjs check gemini-3.8-flash --effort high
 node tools/modelAuthority.mjs gpt-6-astra --effort max
-node tools/modelAuthority.mjs gpt-6-astra --effort high
 node --test tools/modelAuthority.test.mjs tools/modelTier.test.mjs
 ```
 
-The checker exits 0 for an eligible pair, 2 for a non-eligible pair and 1 for usage/read errors. The model advisory never blocks startup and does not establish effort; it is not a security boundary or a push hook. Verify actual model/effort/configuration before a qualified ruling. No rank authorizes publishing.
+The checker exits 0 for an eligible pair, 2 for a non-eligible pair and 1 for usage/read errors. `check` prints the brain verdict, code name, preferred/overkill tier and derived permissions (preferred and overkill brains per tool are in `model-ranks.json`; a listing never grants brain status). The model advisory never blocks startup and does not establish effort; it is not a security boundary or a push hook. Verify actual model/effort/configuration before a qualified ruling. No rank authorizes publishing.
 
 Project `.agents/model-ranks.json` overrides must include current `authority` evidence as well as coarse ranks; legacy rank-only overrides no longer grant brain authority. Copy the kit table to start, preserve the global leader denominator, and record sources for new exact entries. Registry keys are not guaranteed endpoint IDs; resolve aliases explicitly.
 
