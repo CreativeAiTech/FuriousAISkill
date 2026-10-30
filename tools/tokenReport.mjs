@@ -193,6 +193,20 @@ export function lastGate(text) {
   return last;
 }
 
+// Background (async) subagents: the Agent tool_result is only a launch notice; the real reply arrives later
+// in a <task-notification> user record. Returns [{toolUseId, result}] for every notification block in text.
+export function notificationResults(text) {
+  const out = [];
+  try {
+    for (const m of String(text || "").matchAll(/<task-notification>([\s\S]*?)<\/task-notification>/g)) {
+      const id = /<tool-use-id>\s*([^<\s]+)\s*<\/tool-use-id>/.exec(m[1]);
+      const res = /<result>([\s\S]*?)<\/result>/.exec(m[1]);
+      if (id && res) out.push({ toolUseId: id[1], result: res[1] });
+    }
+  } catch {}
+  return out;
+}
+
 function frontmatter(text) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text || "");
   return m ? m[1] : "";
@@ -288,6 +302,13 @@ function parseSession(s) {
       }
     } else if (e.type === "user") {
       const content = e.message && e.message.content;
+      const msgText = resultText(content);
+      if (msgText.includes("<task-notification>")) {
+        for (const n of notificationResults(msgText)) {
+          const sp = spawns.find((x) => x.id === n.toolUseId);
+          if (sp) sp.text = (sp.text || "") + "\n" + n.result;
+        }
+      }
       if (!Array.isArray(content)) continue;
       for (const c of content) {
         if (!c || c.type !== "tool_result") continue;
@@ -295,7 +316,7 @@ function parseSession(s) {
         const sp = spawns.find((x) => x.id === c.tool_use_id);
         if (sp) {
           sp.result = e.toolUseResult || null;
-          sp.text = resultText(c.content) + "\n" + resultText(e.toolUseResult && e.toolUseResult.content);
+          sp.text = (sp.text || "") + resultText(c.content) + "\n" + resultText(e.toolUseResult && e.toolUseResult.content);
         }
       }
     }

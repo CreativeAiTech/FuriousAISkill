@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { lastGate } from "./tokenReport.mjs";
+import { lastGate, notificationResults } from "./tokenReport.mjs";
 import { readCodexUsage } from "./lib/codexUsage.mjs";
 
 function runFixture(root, project, codexHome, out) {
@@ -286,4 +286,33 @@ test("AGT-81: lastGate matches markdown-bolded, case-insensitive, and indented v
   assert.equal(lastGate("> **GATE**: pass"), "pass");
   assert.equal(lastGate("- **GATE**: fail <yarn tsc>"), "fail");
   assert.equal(lastGate("random response without gate line"), null);
+});
+
+test("notificationResults extracts task-notification results by tool-use id", () => {
+  const block = (id, body) => `<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>${id}</tool-use-id>\n<status>completed</status>\n<result>${body}</result>\n<usage>x</usage>\n</task-notification>`;
+  const one = notificationResults(block("toolu_A", "done\n\nGATE: none"));
+  assert.equal(one.length, 1); assert.equal(one[0].toolUseId, "toolu_A"); assert.equal(lastGate(one[0].result), "none");
+  const two = notificationResults(block("toolu_A", "x\nGATE: pass") + "\n" + block("toolu_B", "y\nGATE: fail"));
+  assert.deepEqual(two.map(r => r.toolUseId), ["toolu_A", "toolu_B"]);
+  assert.deepEqual(two.map(r => lastGate(r.result)), ["pass", "fail"]);
+  assert.deepEqual(notificationResults("plain user text, no notification"), []);
+  assert.deepEqual(notificationResults(null), []);
+});
+
+test("routing outcomes count GATE lines delivered by background subagent task-notifications", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-async-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  const claudeDir = path.join(root, ".claude", "projects", project.replace(/[^A-Za-z0-9]/g, "-"));
+  fs.mkdirSync(claudeDir, { recursive: true }); fs.mkdirSync(path.join(codexHome, "sessions"), { recursive: true });
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  const rows = [
+    { type: "assistant", timestamp, message: { id: "turn-1", model: "sonnet", usage: { input_tokens: 1000, output_tokens: 100 }, content: [{ type: "tool_use", id: "toolu_ASYNC1", name: "Agent", input: { subagent_type: "worker", description: "impl", prompt: "do it" } }] } },
+    { type: "user", timestamp, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_ASYNC1", content: "Async agent launched successfully." }] } },
+    { type: "user", timestamp, origin: { kind: "task-notification" }, message: { role: "user", content: "<task-notification>\n<task-id>a838</task-id>\n<tool-use-id>toolu_ASYNC1</tool-use-id>\n<status>completed</status>\n<summary>done</summary>\n<result>Changed x.\n\nGATE: pass</result>\n<usage>total_tokens: 5</usage>\n</task-notification>" } },
+  ];
+  fs.writeFileSync(path.join(claudeDir, "async.jsonl"), rows.map(r => JSON.stringify(r)).join("\n"));
+  runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+  assert.match(report, /1 of 1 implementation spawns carried a GATE line/);
 });
