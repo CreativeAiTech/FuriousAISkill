@@ -183,14 +183,18 @@ function resultText(c) {
   return "";
 }
 // Leading whitespace allowed: Claude Code indents every line of a subagent's hand-back in the tool_result.
-export function lastGate(text) {
-  let last = null;
+// Last GATE line: {gate, cmd}; cmd is the text after pass|fail|none, markdown-stripped, whitespace collapsed ("" if none).
+export function gateLine(text) {
+  let last = { gate: null, cmd: "" };
   try {
-    for (const m of String(text || "").matchAll(/^[ \t>*\x60-]*\*?\*?\x60?GATE\*?\*?\x60?:\*?\*?\s*\x60?\*?\*?(pass|fail|none)\x60?\*?\*?\b/gim)) {
-      last = m[1].toLowerCase();
+    for (const m of String(text || "").matchAll(/^[ \t>*\x60-]*\*?\*?\x60?GATE\*?\*?\x60?:\*?\*?\s*\x60?\*?\*?(pass|fail|none)\x60?\*?\*?\b([^\r\n]*)/gim)) {
+      last = { gate: m[1].toLowerCase(), cmd: m[2].replace(/^[\s\x60*]+|[\s\x60*]+$/g, "").replace(/\s+/g, " ") };
     }
   } catch {}
   return last;
+}
+export function lastGate(text) {
+  return gateLine(text).gate;
 }
 
 // Background (async) subagents: the Agent tool_result is only a launch notice; the real reply arrives later
@@ -421,21 +425,27 @@ const routing = {}; // tier -> {n, pass, fail, vchecked, falsePass}
 const rt = (k) => (routing[k] = routing[k] || { n: 0, pass: 0, fail: 0, vchecked: 0, falsePass: 0 });
 let implSpawns = 0, implGated = 0, ruleEditSessions = 0;
 for (const s of sessions) {
-  let last = null; // latest implementation spawn so far
+  const pending = []; // implementation spawns with gate pass|fail not yet verifier-checked, in spawn order
+  const norm = (x) => String(x || "").toLowerCase().replace(/\s+/g, " ").trim();
   for (const sp of s.spawns) {
     try {
       const type = sp.input.subagent_type || "general-purpose";
-      const gate = lastGate(sp.text);
+      const { gate, cmd } = gateLine(sp.text);
       if (!NON_IMPL.has(type)) {
         implSpawns++;
         const fm = sp.input.model ? family(sp.input.model) : null;
         const am = agentFrontmatterModel(type);
         const tier = fm || (am && /opus|sonnet|haiku/i.test(am) ? family(am) : family(s.mainModel));
-        last = { tier, gate };
+        if (gate === "pass" || gate === "fail") pending.push({ tier, gate, cmd: norm(cmd) });
         if (gate) { implGated++; const r = rt(tier); r.n++; if (gate === "pass") r.pass++; else if (gate === "fail") r.fail++; }
-      } else if (type === "verifier" && last && (gate === "pass" || gate === "fail")) {
-        const r = rt(last.tier); r.vchecked++;
-        if (last.gate === "pass" && gate === "fail") r.falsePass++;
+      } else if (type === "verifier" && pending.length && (gate === "pass" || gate === "fail")) {
+        const vc = norm(cmd);
+        let idx = -1;
+        for (let i = pending.length - 1; i >= 0; i--) if (pending[i].cmd && vc.includes(pending[i].cmd)) { idx = i; break; }
+        if (idx < 0) idx = pending.length - 1;
+        const [w] = pending.splice(idx, 1);
+        const r = rt(w.tier); r.vchecked++;
+        if (w.gate === "pass" && gate === "fail") r.falsePass++;
       }
     } catch {}
   }

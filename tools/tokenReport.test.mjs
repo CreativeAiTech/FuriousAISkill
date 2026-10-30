@@ -6,7 +6,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
-import { lastGate, notificationResults } from "./tokenReport.mjs";
+import { lastGate, gateLine, notificationResults } from "./tokenReport.mjs";
 import { readCodexUsage } from "./lib/codexUsage.mjs";
 
 function runFixture(root, project, codexHome, out) {
@@ -315,4 +315,37 @@ test("routing outcomes count GATE lines delivered by background subagent task-no
   runFixture(root, project, codexHome, out);
   const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
   assert.match(report, /1 of 1 implementation spawns carried a GATE line/);
+});
+
+test("gateLine returns the last GATE line with its command", () => {
+  assert.deepEqual(gateLine("done\nGATE: pass node --test a.test.mjs"), { gate: "pass", cmd: "node --test a.test.mjs" });
+  assert.deepEqual(gateLine("x\nGATE: fail first\n**GATE: pass \`yarn  tsc --noEmit\`**"), { gate: "pass", cmd: "yarn tsc --noEmit" });
+  assert.deepEqual(gateLine("    > \`GATE: fail\` npm test"), { gate: "fail", cmd: "npm test" });
+  assert.deepEqual(gateLine("ok\nGATE: none"), { gate: "none", cmd: "" });
+  assert.deepEqual(gateLine("no gate here"), { gate: null, cmd: "" });
+});
+
+test("routing outcomes attribute each verifier to the worker whose command it reran", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-verifier-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  const claudeDir = path.join(root, ".claude", "projects", project.replace(/[^A-Za-z0-9]/g, "-"));
+  fs.mkdirSync(claudeDir, { recursive: true }); fs.mkdirSync(path.join(codexHome, "sessions"), { recursive: true });
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  const spawn = (id, type, extra, reply) => [
+    { type: "assistant", timestamp, message: { id: "turn-" + id, model: "sonnet", usage: { input_tokens: 1000, output_tokens: 100 }, content: [{ type: "tool_use", id, name: "Agent", input: { subagent_type: type, description: id, prompt: "do it", ...extra } }] } },
+    { type: "user", timestamp, message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: reply }] } },
+  ];
+  const rows = [
+    ...spawn("toolu_A", "worker", {}, "Changed a.\n\nGATE: pass node --test a.test.mjs"),
+    ...spawn("toolu_B", "worker", { model: "opus" }, "Changed b.\n\nGATE: pass yarn tsc --noEmit"),
+    ...spawn("toolu_V1", "verifier", {}, "Failed.\n\nGATE: fail node --test a.test.mjs"),
+    ...spawn("toolu_V2", "verifier", {}, "Ok.\n\nGATE: pass yarn tsc --noEmit"),
+    ...spawn("toolu_V3", "verifier", {}, "Ok.\n\nGATE: pass yarn tsc --noEmit"),
+  ];
+  fs.writeFileSync(path.join(claudeDir, "verifier.jsonl"), rows.map(r => JSON.stringify(r)).join("\n"));
+  runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+  assert.ok(report.includes("| sonnet | 1 | 1 | 0 | n=1, collecting (need 10) | 1 | 1 |"), report);
+  assert.ok(report.includes("| opus | 1 | 1 | 0 | n=1, collecting (need 10) | 1 | 0 |"), report);
 });
