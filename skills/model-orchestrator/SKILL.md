@@ -60,7 +60,7 @@ After checks pass, the manager classifies the finished diff before opening an MR
 
 The brain picks one: **approve** and integrate in-session; **split** the critical part into a separate task and keep this task bounded (hold or revert that part); or **decide** in a decision note or spec and hand execution back to a cheaper worker. A qualified brain manager resolves critical work itself, but still needs a separate reviewer for edits it authored.
 
-Publishing still requires applicable existing user authorization, intended destination, current qualified approval and passing checks. No role or benchmark grants secret access, OS permissions, ownership changes, force-push, merge or deploy authority. Do executable preparation before asking for concrete final approval where needed.
+Publishing still requires applicable existing user authorization, intended destination, current qualified approval and passing checks. No role or benchmark grants secret access, OS permissions, ownership changes, force-push, merge or deploy authority. Merge authority comes only from the user: a direct instruction for that merge, or a standing grant recorded in the project's handoff rules, within the limits listed there. Do executable preparation before asking for concrete final approval where needed.
 
 ## Cross-tool and special routes
 
