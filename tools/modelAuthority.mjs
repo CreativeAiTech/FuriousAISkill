@@ -7,6 +7,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const BENCHMARK = "AA Intelligence Index v4.3.2";
 const EFFORTS = new Set(["none", "low", "medium", "high", "xhigh", "max", "ultra", "default"]);
 const HIGH_EFFORTS = new Set(["high", "xhigh", "max", "ultra"]);
+// Frozen absolute brain bar per benchmark version (85% of the 58-point leader). Raising the bar is a data
+// edit; lowering it, or adding a new benchmark version, needs a code change here.
+const FROZEN_BAR = { "AA Intelligence Index v4.3.2": 49.3 };
 const BAR_FLOOR_PERCENT = 85; // code floor: a lower bar needs a code change, not a data edit
 const text = (value) => typeof value === "string" && value.trim().length > 0;
 const id = (value) => text(value) ? value.toLowerCase() : "";
@@ -64,6 +67,9 @@ export function assess(model, effort, table, { now = new Date().toISOString().sl
     return fail("bar.score must equal bar.percent of bar.ofLeaderScore.");
   }
   if (bar.score > authority.leaderScore) return fail("bar.score must not exceed the leader score.");
+  const frozen = Object.hasOwn(FROZEN_BAR, authority.benchmark) ? FROZEN_BAR[authority.benchmark] : undefined;
+  if (frozen === undefined) return fail("No frozen brain bar is defined in code for this benchmark version.");
+  if (bar.score < frozen) return fail(`bar.score is below the frozen code bar of ${frozen}; lowering it needs a code change.`);
   const checked = utcDate(authority.checkedAt);
   const today = utcDate(now);
   if (checked === null || today === null) return fail("Missing or invalid UTC date; use YYYY-MM-DD.");

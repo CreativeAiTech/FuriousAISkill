@@ -137,6 +137,24 @@ test("bar validation: percent below the 85 code floor, mismatched score and bad 
   assert.equal(check(stricter).eligible, true);
 });
 
+test("the bar cannot be lowered by data alone; raising it is a data edit", () => {
+  const lowered = structuredClone(shipped);
+  lowered.authority.bar = { percent: 85, ofLeaderScore: 40, score: 34 };
+  const sonnet = brainCheck("claude-sonnet-5-5", "high", lowered, shippedPrices, { now: NOW });
+  assert.equal(sonnet.brain, false);
+  assert.match(sonnet.reason, /frozen code bar/);
+  assert.equal(brainCheck("claude-opus-5-5", "medium", lowered, shippedPrices, { now: NOW }).brain, false);
+  const higher = structuredClone(shipped);
+  higher.authority.bar = { percent: 90, ofLeaderScore: 58, score: 52.2 };
+  const opus = brainCheck("claude-opus-5-5", "medium", higher, shippedPrices, { now: NOW });
+  assert.equal(opus.brain, false);
+  assert.equal(opus.barScore, 52.2);
+  assert.equal(brainCheck("claude-opus-5-5", "high", higher, shippedPrices, { now: NOW }).brain, true);
+  const unknownBenchmark = table(58);
+  unknownBenchmark.authority.benchmark = "AA Intelligence Index v5.0";
+  denied(unknownBenchmark, /benchmark/);
+});
+
 test("a new leader on the same benchmark does not move the frozen bar", () => {
   const data = structuredClone(shipped);
   data.authority.leaderScore = 62;

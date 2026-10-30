@@ -18,7 +18,7 @@ For the **benchmark route**, a brain is a model whose exact listed effort scores
 - A new leader on the same benchmark version does not move the bar. Only a benchmark version change does, and then the whole cohort and the bar are refreshed together.
 - There is no expiry. `checkedAt` is provenance only; a future-dated `checkedAt` is still rejected.
 - No score transfers between efforts, model releases, aliases, harnesses or fallback configurations. `default`, unreported and unknown efforts and missing scores never qualify.
-- The code floor for `bar.percent` is 85. Lowering it needs a code change, not a data edit. `bar.score` must equal `percent * ofLeaderScore / 100` (within 0.05) and cannot exceed the leader.
+- The code floor for `bar.percent` is 85. Lowering it needs a code change, not a data edit. The code also pins the absolute bar per benchmark version (`FROZEN_BAR`, 49.3 for v4.3.2): raising `bar.score` in data is allowed, lowering it or adding a new benchmark version needs a code change. `bar.score` must equal `percent * ofLeaderScore / 100` (within 0.05) and cannot exceed the leader.
 
 The task route uses its reviewed quality/risk requirements. A valid task qualification need not have an aggregate benchmark score.
 
