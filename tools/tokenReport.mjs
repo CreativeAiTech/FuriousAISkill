@@ -916,7 +916,7 @@ if (ag.status === "ok") {
 L.push("");
 const rec = [];
 if (spawnRows.length && wasteful.length / spawnRows.length > 0.3) rec.push(`${wasteful.length} of ${spawnRows.length} observed Claude spawns (${Math.round(100 * wasteful.length / spawnRows.length)}%) cost more than modeled inline: consider keeping small tasks inline.`);
-if (totalWaste > kitCost && totalWaste > 0) rec.push(`Late-checkpoint waste (${usd(totalWaste)}) exceeds kit overhead (${usd(kitCost)}): checkpoint earlier (lower CC_WATCH_SOFT/HARD).`);
+if (totalWaste > kitCost && totalWaste > 0) rec.push(`Late-checkpoint waste (${usd(totalWaste)}) exceeds kit overhead (${usd(kitCost)}): start fresh sessions earlier or split long tasks.`);
 if (top10.length && top10[0].chars > 20000) rec.push(`Bounded reads are being skipped: largest tool result is ${fmt(top10[0].chars)} chars (${top10[0].tool}: ${top10[0].hint || "n/a"}).`);
 if (totalSpend && kitCost / totalSpend > 0.05) rec.push(`Kit overhead is ${pct(kitCost)} of spend (> 5%): trim rules/descriptions.`);
 if (ag.status === "ok") {

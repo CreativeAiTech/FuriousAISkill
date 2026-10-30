@@ -13,7 +13,6 @@ used daily on a real game project.
   chooses economical available models/efforts and delegates cohesive work. Qualification gates specific high-risk decisions and final approval.
 - **Task board** (`task-board` skill, `tools/baton.mjs`, experimental, opt-in): tickets with claims and leases, a handoff
   "baton" each session writes before it stops, and a brief the next agent reads first. `git push` is the lock.
-- **Context checkpoints** (`context-compressor` skill): turn a long chat into a short `CONTEXT.md` and continue fresh.
 - **Token report** (`tools/tokenReport.mjs`): observed usage, telemetry coverage, and modeled price comparisons.
 
 `sync.mjs` maintains Claude Code (`~/.claude`) and Antigravity (`~/.gemini`) copies plus a managed Codex policy block (`~/.codex/AGENTS.md`). Codex discovers canonical skills directly in `~/.agents/skills` and project `.agents/skills`; no additional skill copy is needed.
@@ -68,10 +67,8 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | :--- | :--- |
 | `rules/token-optimization.md` | Lean context, generic lifecycle, bounded tool use, checkpoint trigger |
 | `skills/model-orchestrator` | Universal manager role; economical provider-neutral model/effort routing, bounded delegation, action-specific qualification, independent exact-revision review, task specs and handoffs. Templates in `assets/` (task spec, decision note, project min-tier table) |
-| `skills/context-compressor` | `CONTEXT.md` (its only writer and template) |
-| `tools/contextProfile.mjs` | Context profile: the project's measured starting context, heavy-turn size and window headroom; sets context-watch's nudges, re-runs daily at session start, report at `.agents/reports/context-profile.md` |
-| `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from context-watch, report at `.agents/reports/context-hygiene.md` |
-| `tools/contextAudit.mjs` | Context-watch audit: how well the nudges work, per kit version, from transcripts |
+| `tools/agContext.mjs` | Antigravity context meter (Antigravity has no native compaction): measured prompt growth of the newest chat vs this project's budget; prints `checkpoint` when a fresh chat is due |
+| `tools/contextHygiene.mjs` | Token hygiene audit: flags what bloats the always-loaded context (big/growing rule files, duplicate skills and hooks, long CONTEXT.md header, oversized backlog), runs on the first session and then weekly from session-watch, report at `.agents/reports/context-hygiene.md` |
 | `hooks/rule-lint.mjs` + `tools/lib/ruleLint.mjs` | Write-time rule lint (Claude Code): after an edit to CLAUDE.md, AGENTS.md, GEMINI.md or `.agents/rules/**`, one warning line for a big file with no "Before you" table, a topic file without `Keywords:`, a line duplicated in another always-on file, or a missing trigger-table path; never blocks |
 | `tools/modelTier.mjs` + `tools/modelAuthority.mjs` + `hooks/model-check.mjs` | Manager action-scope advisory (`"modelGate": true` opts into reported configuration evidence): no startup tool denial or rank-based ticket hiding. Legacy tier exports/QUOTA rows remain compatible. Exact authority evidence and scoped task qualification remain fail-closed; coarse rank and manager role grant no authority |
 | `tools/contextPacket.mjs` | Verified source packets for focused workers (`build` / `verify`): slices exact source line ranges with file/excerpt SHA-256 provenance, byte bounds, and omitted-context disclosures; rejects stale files, altered excerpts, path escapes and oversized packets |
@@ -81,7 +78,7 @@ For behavior changes, add a fragment `.changes/<TICKET>.md` (`bump: minor|patch|
 | `tools/tokenReport.mjs` | Token report: observed usage, modeled overhead/delegation comparisons and context hygiene (see below) |
 | `tools/release.mjs` | Kit releases: numbers at ship time from `.changes/<TICKET>.md` fragments, updates `VERSION` + `CHANGELOG.md`, commits, tags, and pushes |
 
-Claude Code-only extra: the context-watch hook measures real token growth and triggers `context-compressor`. It lives in `hooks/context-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
+Claude Code-only extra: the session-watch hook refreshes the daily token report and weekly hygiene audit at startup and flags stale (24h+) sessions; context size is left to Claude Code's native auto-compact. It lives in `hooks/session-watch.cjs` and is registered by sync (its per-session state stays in `~/.claude/hooks/state/`).
 
 ## Token report
 
@@ -89,7 +86,7 @@ Claude Code-only extra: the context-watch hook measures real token growth and tr
 
 Codex reads JSONL below `<codex-home>/sessions` (default `CODEX_HOME` or `~/.codex`) without modifying source files. It matches normalized exact `session_meta.cwd`; child directories and worktrees are not implicitly included. Event timestamps define the window; the last earlier cumulative snapshot is the baseline. A first snapshot is counted only when an in-window origin is established; missing history, counter decreases, ambiguous ordering and invalid records are flagged. Model/effort transitions are preserved without allocating uncertain increments to a model. Main, worker, guardian and unknown roles are counted separately. Per-session reported counters have unknown parent/worker overlap, so no unique task-wide total, Codex cost or quota savings is reported. `observed` describes available counters, not complete task coverage. Message/tool contents are excluded from Codex output.
 
-Output goes to `<project>/.agents/reports/` (`token-report.md`, separate `codex-usage.json`, `history.csv`, self-ignoring `.gitignore`). Legacy CSV columns retain their positions; `stretch_cc`/`stretch_ag` now denote modeled price ratios only. The context-watch hook refreshes the report at session start once a day and shows the coverage-aware summary.
+Output goes to `<project>/.agents/reports/` (`token-report.md`, separate `codex-usage.json`, `history.csv`, self-ignoring `.gitignore`). Legacy CSV columns retain their positions; `stretch_cc`/`stretch_ag` now denote modeled price ratios only. The session-watch hook refreshes the report at session start once a day and shows the coverage-aware summary.
 
 Copies on claude.ai (Settings, Capabilities, Skills) can't be synced from here. Re-upload `skills/<name>` after you edit it.
 

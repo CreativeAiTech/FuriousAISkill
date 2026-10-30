@@ -4,7 +4,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "node \"{{AGENTS}}/hooks/context-watch.cjs\"",
+          "command": "node \"{{AGENTS}}/hooks/session-watch.cjs\"",
           "timeout": 10
         }
       ]
@@ -16,7 +16,7 @@
       "hooks": [
         {
           "type": "command",
-          "command": "node \"{{AGENTS}}/hooks/context-watch.cjs\"",
+          "command": "node \"{{AGENTS}}/hooks/session-watch.cjs\"",
           "timeout": 10
         }
       ]

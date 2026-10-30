@@ -35,7 +35,7 @@ Native helpers stay under the parent's ticket; do not create persistent tickets/
 
 Set explicit call/time/spend limits proportional to the task (for example report back by 30 calls, earlier on a blocker). Do not recursively delegate or escalate without bounds. Same failure twice: stop identical retries; **Escalate to a brain** (§ Qualification and action gates). Scope growth triggers fresh risk/budget triage before additional work. Routine implementation choices within an authorized prepared scope proceed automatically, including on unknown/lower models.
 
-Use project verification commands; report actual outcomes and repair relevant failures within scope. Do not invent successful checks, reviewer dispatch, runtime model identity or approval. `context-compressor` owns conversational checkpoints; retain exact objective, decisions, authorization, evidence and next action in the project baton.
+Use project verification commands; report actual outcomes and repair relevant failures within scope. Do not invent successful checks, reviewer dispatch, runtime model identity or approval. Claude Code and Codex compact natively; retain exact objective, decisions, authorization, evidence and next action in the project baton.
 
 ## Qualification and action gates
 

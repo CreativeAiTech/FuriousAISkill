@@ -4,7 +4,7 @@
 // Writes <project>/.agents/reports/context-hygiene.md and ~/.claude/hooks/state/context-hygiene/<slug>.json
 // ({date, sizes, baseline}) so the next run can diff week over week. Never prints transcript content.
 // Also counts on-demand reads of <project>/.agents/rules/*.md from transcripts and flags files unread for 30 days.
-// Run on the first session in a project and then weekly by context-watch's SessionStart hook.
+// Run on the first session in a project and then weekly by session-watch's SessionStart hook.
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
