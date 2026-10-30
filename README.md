@@ -134,9 +134,38 @@ A zero-dependency MCP server (`mcp/grok-bridge/`) giving any project the tools `
 - API key lookup, first valid wins: env `XAI_API_KEY` / `VITE_XAI_API_KEY`, then the project's `.env.local` / `.env`, then `~/.agents/.env` (kit-ignored). The key is never logged or stored.
 - Ledger: `~/.agents/state/grok-budget.json` (one per machine, kit-ignored). Monthly limit from `AI_USD_BUDGET_MONTHLY` (same lookup), default $20.
 
+## Results so far
+
+Measured on one game project, Oct 28 to 30, 2026 (kit 1.9.0). Dollars are modeled at API list prices, not billing or quota, and output quality is not measured yet.
+
+| Tool | Modeled actual | Baseline | Net % |
+| :-- | --: | --: | --: |
+| Claude Code vs all-Opus | $100.00 | $131.14 | 22.7% |
+| Antigravity vs all-Pro | $81.02 | $139.13 | 40.5% |
+
+- Biggest win: delegating to cheaper models saved a modeled $30.38 over 40 spawns, about 21.8x the kit's own overhead (1.4% of spend).
+- Biggest gap: late checkpoints wasted $4.96, and routing quality is unmeasured. Details and limits: [docs/RESULTS.md](docs/RESULTS.md).
+
+## Roadmap
+
+**In progress**
+- One-command MR review readiness report and a task dossier scaffolder (templates only; approval must match the reviewed revision).
+- Closing one provider telemetry/pricing gap in the token report.
+
+**Planned**
+- Decide whether the experimental task-board skill and auto-baton hook become stable.
+- First-run welcome note listing what you get.
+- Extract the ticketing engine into its own package.
+- Routing-outcome telemetry, so quality can be measured, not just cost.
+- Earlier checkpoints to cut late-context waste.
+
+**Known issues**
+- The baton merge-driver proof script fails (its scratch repo is missing a module).
+- Codex token coverage is partial.
+
 ## How this was built
 
-Designed and directed by AlexTheHero (CreativeAiTech), built together with AI agents: mainly Claude Code (Claude Opus),
+Designed and directed by CreativeAiTech (AlexTheHero), built together with AI agents: mainly Claude Code (Claude Opus),
 plus Gemini in Antigravity and Grok. Tested in daily use on their game project.
 
 ## License
