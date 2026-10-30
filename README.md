@@ -136,7 +136,7 @@ A zero-dependency MCP server (`mcp/grok-bridge/`) giving any project the tools `
 
 ## Results so far
 
-Measured on one game project, Oct 28 to 30, 2026 (kit 1.9.0). Dollars are modeled at API list prices, not billing or quota, and output quality is only self-reported so far.
+Measured on one game project, Oct 28 to 30, 2026 (kit 1.9.0). Dollars are modeled at API list prices, not billing or quota, and output quality is mostly self-reported so far.
 
 | Tool | Modeled actual | Baseline | Net % |
 | :-- | --: | --: | --: |
@@ -144,19 +144,19 @@ Measured on one game project, Oct 28 to 30, 2026 (kit 1.9.0). Dollars are modele
 | Antigravity vs all-Pro | $81.02 | $139.13 | 40.5% |
 
 - Biggest win: delegating to cheaper models saved a modeled $30.38 over 40 spawns, about 21.8x the kit's own overhead (1.4% of spend).
-- Biggest gap: late checkpoints wasted $4.96. Sonnet workers report 18 of 19 checks passing, but no independent verifier has rechecked them yet. Details and limits: [docs/RESULTS.md](docs/RESULTS.md).
+- Biggest gap: late checkpoints wasted $4.96. Sonnet workers report 19 of 20 checks passing; independent verifier rechecks started Oct 30 (1 so far, 0 false passes). Details and limits: [docs/RESULTS.md](docs/RESULTS.md).
 
 ## Roadmap
 
 **In progress**
 - One-command MR review readiness report and a task dossier scaffolder (templates only; approval must match the reviewed revision).
 - Closing one provider telemetry/pricing gap in the token report.
+- Independent verifier rechecks of worker passes: shipped as a rule; collecting rechecks (1 so far, 0 false passes).
 
 **Planned**
 - Decide whether the experimental task-board skill and auto-baton hook become stable.
 - First-run welcome note listing what you get.
 - Extract the ticketing engine into its own package.
-- Independent verifier rechecks of worker results, so quality is measured, not just self-reported.
 - Earlier checkpoints to cut late-context waste.
 
 **Known issues**

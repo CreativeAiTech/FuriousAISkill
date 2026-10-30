@@ -11,7 +11,7 @@ What the kit's routing is estimated to save on one real project, from the kit's 
 The dollar figures are **modeled**, not billed. They reprice the same tokens at public API list prices, as if all the work had run on the top model. That is a counterfactual.
 
 - It is not subscription billing, not quota, and not realized savings.
-- Output quality is only self-reported so far (see Routing outcomes). These numbers say what the work would cost, not whether it was as good.
+- Output quality is mostly self-reported so far (see Routing outcomes). These numbers say what the work would cost, not whether it was as good.
 - One project, three days. Treat it as a direction, not a verdict.
 
 ## Headline: modeled price comparison
@@ -57,7 +57,7 @@ Inline estimate is what the same work would cost in the main session. Antigravit
 - **Late checkpoints**: carrying long context cost $4.96, more than the kit overhead. Checkpoints should come earlier.
 - **Opus subagents under an Opus session** save little: $4.11 on $15.36 of spend over 8 spawns.
 - **Antigravity subagents**: 94% of their spend runs at the main model's price. Research should go to flash-lite, which saved $1.20 where it was used.
-- **Routing outcomes are self-reported**: workers end with `GATE: pass|fail|none` (their verify command's exit status). After a parser fix (background subagent replies were not being read), 20 of 34 implementation spawns carried a GATE line: Sonnet 18 pass, 0 fail, 1 none (95%); Opus 1 pass. No verifier rechecked them yet, so false passes are unmeasured, and 14 spawns gave no GATE line.
+- **Routing outcomes are mostly self-reported**: workers end with `GATE: pass|fail|none` (their verify command's exit status). After a parser fix (background subagent replies were not being read), 20 of 34 implementation spawns carried a GATE line: Sonnet 18 pass, 0 fail, 1 none (95%); Opus 1 pass. Since Oct 30 the manager reruns each worker pass with the `verifier` subagent (about 1% of a worker's cost); 1 recheck so far, 0 false passes, so the false-pass rate is still unmeasured in practice. 14 spawns gave no GATE line.
 - **Codex**: coverage is partial, and no cost or quota savings are reported.
 - **Unbounded reads**: one 29.7k-character read was seen in a main session.
 
