@@ -69,6 +69,16 @@ node ~/.agents/tools/tokenReport.mjs --project <dir> --since <ISO date> --summar
 
 The full report is written to `<project>/.agents/reports/token-report.md`.
 
+## Baseline: cheaper delegation
+
+Explicit model and effort on delegates, fewer wake-ups (model-orchestrator 1.11.0). Baseline recorded; after-figure due 2026-11-07.
+
+- **Window**: 7 days to 2026-10-31. Modeled list-price equivalents, not billing.
+- **Claude Code**: about 1.71B tokens, $750.86. Opus 84% of tokens / 90% of cost, Sonnet 15% / 10%, Haiku 0.7% / 0.05%. Main sessions 71% / 73%, subagents 29% / 27%.
+- **Project scorecard**: 56 merged tickets, $6.75 modeled per ticket, 38% autonomy (no owner input), 38% rework.
+- **Re-run**: `node tools/tokenReport.mjs --days 7 --summary` and the project's scorecard command.
+- **Check**: Opus share of cost falls and subagent share of work rises, with no rise in rework. No savings claim until the after-figure exists.
+
 ## History
 
 Add one row per release so changes can be compared.
