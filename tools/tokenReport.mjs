@@ -460,6 +460,34 @@ for (const s of sessions) {
 }
 const routingTiers = Object.keys(routing).filter((k) => routing[k].n > 0);
 
+// ---------- monolithic sessions: multi-step work with no delegation ----------
+const MONO_FILES = 5, AG_MONO_REQS = 40;
+const BOOKKEEPING = (fp) => { const p = "/" + fp; return p.includes("/.agents/backlog/") || (p.includes("/.agents/") && /\/(state|backlog)\.md$/.test(p)) || p.includes("/.claude/projects/") || p.includes("/scratchpad/"); };
+const monoClaude = [];
+for (const s of sessions) {
+  try {
+    if (s.spawns.some((sp) => !NON_IMPL.has(sp.input.subagent_type || "general-purpose"))) continue;
+    const files = new Set();
+    for (const tu of s.toolUses.values()) {
+      if (!["Edit", "Write", "MultiEdit", "NotebookEdit"].includes(tu.name)) continue;
+      const fp = String((tu.input && (tu.input.file_path || tu.input.notebook_path)) || "").replace(/\\/g, "/").toLowerCase();
+      if (fp && !BOOKKEEPING(fp)) files.add(fp);
+    }
+    if (files.size >= MONO_FILES) monoClaude.push({ id: s.id, model: family(s.mainModel), files: files.size });
+  } catch {}
+}
+const monoSection = (flagged, total, unit, col, rule) => {
+  const o = [`#### Monolithic sessions`, "", rule, ""];
+  if (!flagged.length) o.push(`None flagged in ${total} sessions.`, "");
+  else {
+    const top = [...flagged].sort((a, b) => b[unit] - a[unit]).slice(0, 15); // largest first; cap keeps the report readable
+    o.push(`${flagged.length} of ${total} sessions flagged.`, "", `| Session | Main model | ${col} |`, `| :-- | :-- | --: |`);
+    for (const r of top) o.push(`| ${r.id} | ${r.model} | ${r[unit]} |`);
+    o.push(...(flagged.length > top.length ? ["", `…and ${flagged.length - top.length} more.`] : []), "");
+  }
+  return o;
+};
+
 const delegationSavings = spawnRows.reduce((a, r) => a + r.savings, 0);
 const wasteful = spawnRows.filter((r) => r.savings < 0);
 
@@ -689,6 +717,9 @@ if (agFiles.length) {
   } catch { ag.status = "unreadable"; }
 }
 
+const agParents = new Set(ag.subagents.map((x) => x.parentId)); // after AG parse (ag is filled above)
+const monoAg = ag.mainSessions.filter((x) => x.reqs >= AG_MONO_REQS && !agParents.has(x.id)).map((x) => ({ id: x.id.slice(0, 8), model: x.mainModel, reqs: x.reqs }));
+
 // ---------- savings summary: same tokens repriced on one default model ----------
 // Claude: baseline = main turns at baseFam + every spawn priced inline. Spawns skipped by the "else continue" branch have no spend
 // in totalSpend and no spawnRows entry, so they add nothing to either side: gross = (baseMain - mainActual) + sum(inlineBase - actual) exactly.
@@ -802,8 +833,9 @@ else {
   L.push("", `Total Antigravity kit overhead: **${usd(ag.kitCost)}** (${agPct(ag.kitCost)} of ${usd(ag.cost)} spend).`, "");
 
   L.push(`### Delegation`, "");
+  const agMono = monoSection(monoAg, ag.mainSessions.length, "reqs", "Requests", `Flagged when a main session made at least ${AG_MONO_REQS} requests and no subagent has it as parent (manager did the work without delegating).`);
   if (!ag.spawns.length) {
-    L.push(`No subagents spawned in ${ag.mainSessions.length} main sessions.`, "");
+    L.push(`No subagents spawned in ${ag.mainSessions.length} main sessions.`, "", ...agMono);
   } else {
     const agBy = {};
     for (const r of ag.spawns) {
@@ -814,7 +846,7 @@ else {
     L.push(`| Subagent / model | Spawns | Actual $ | Inline est. $ | Savings $ |`, `| :-- | --: | --: | --: | --: |`);
     for (const [k, v] of Object.entries(agBy)) L.push(`| ${k} | ${v.n} | ${usd(v.a)} | ${usd(v.i)} | ${usd(v.i - v.a)} |`);
     L.push(`| **total** | **${ag.spawns.length}** | | | **${usd(ag.delegationSavings)}** |`, "");
-    L.push(`Inline estimate = what the same work would cost in the main session at its model price. Spawns save only when the worker runs on a cheaper tier than the main session (e.g. \`research\` on flash-lite); same-tier workers pay a cold start plus their own growing context.${ag.spawns.length < 30 ? ` Small sample (${ag.spawns.length} runs, estimated list prices): treat as a direction, not a verdict.` : ""}`, "");
+    L.push(`Inline estimate = what the same work would cost in the main session at its model price. Spawns save only when the worker runs on a cheaper tier than the main session (e.g. \`research\` on flash-lite); same-tier workers pay a cold start plus their own growing context.${ag.spawns.length < 30 ? ` Small sample (${ag.spawns.length} runs, estimated list prices): treat as a direction, not a verdict.` : ""}`, "", ...agMono);
   }
 }
 
@@ -829,8 +861,9 @@ L.push("", `| Total over window | $ | % of spend |`, `| :-- | --: | --: |`,
   `| Project | ${usd(projectCost)} | ${pct(projectCost)} |`, "");
 
 L.push(`## Delegation`, "");
+const ccMono = monoSection(monoClaude, sessions.length, "files", "Edited files", `Flagged when the main session edited at least ${MONO_FILES} distinct files (excluding backlog/state/memory/scratchpad paths) and spawned no implementation subagent (${[...NON_IMPL].join(", ")} do not count).`);
 if (!totalSpawns) {
-  L.push(`No Claude Code spawns observed in ${sessions.length} Claude sessions. This does not describe Codex activity or establish delegation savings.`, "");
+  L.push(`No Claude Code spawns observed in ${sessions.length} Claude sessions. This does not describe Codex activity or establish delegation savings.`, "", ...ccMono);
 } else {
   const by = {};
   for (const r of spawnRows) { const k = r.type + " / " + r.model; by[k] = by[k] || { n: 0, a: 0, i: 0 }; by[k].n++; by[k].a += r.actual; by[k].i += r.inline; }
@@ -851,6 +884,7 @@ if (!totalSpawns) {
     for (const r of esc) L.push(`| ${r.session} | ${r.effort} | ${r.desc.replace(/\|/g, "\\|")} | ${usd(r.actual)} |`);
     L.push("", `${esc.length} escalation${esc.length === 1 ? "" : "s"}: ${mx.length} at max (${usd(sum(mx))}), ${hi.length} at high (${usd(sum(hi))}), ${oth.length} other`, "");
   }
+  L.push(...ccMono);
 }
 
 L.push(`## Routing outcomes`, "");
@@ -964,8 +998,9 @@ try {
       ag.status === "no_matching_usage" ? `no matching usage; costs and delegation unknown${ag.skipped ? ` (${ag.skipped} unreadable DBs skipped; incomplete coverage)` : ""}` :
       ag.status === "none" ? "no source; costs and delegation unknown" : "not readable; costs and delegation unknown";
     const claudeSummary = ccAvailable ? `Claude ${sessions.length} sessions, modeled spend ${usd(totalSpend)}, modeled delegation difference ${usd(delegationSavings)}` : "Claude usage unavailable; costs and delegation unknown";
+    const monoSummary = `Monolithic sessions: Claude ${ccAvailable ? monoClaude.length + "/" + sessions.length : "n/a"}, Antigravity ${ag.status === "ok" ? monoAg.length + "/" + ag.mainSessions.length : "n/a"}`;
     const codexCostSummary = (codex.modeledCostUsd !== null && codex.modeledCostUsd > 0) ? `modeled cost ${usd(codex.modeledCostUsd)}` : "cost unknown";
-    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""}: ${claudeSummary} · Codex ${codex.coverage}, ${codex.sessions.length} sessions (main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}); per-session reported counters in report, overlap unknown, ${codexCostSummary} · Antigravity ${agSummary} → ${shown}`);
+    console.log(`Token report${kitVersion ? " kit v" + kitVersion : ""}: ${claudeSummary} · Codex ${codex.coverage}, ${codex.sessions.length} sessions (main ${codex.roles.main}, worker ${codex.roles.worker}, guardian ${codex.roles.guardian}, unknown ${codex.roles.unknown}); per-session reported counters in report, overlap unknown, ${codexCostSummary} · Antigravity ${agSummary} · ${monoSummary} → ${shown}`);
   } else console.log(reportPath);
 } catch (e) {
   console.error("tokenReport: " + e.message);
