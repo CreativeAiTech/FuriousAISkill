@@ -2,7 +2,7 @@
 
 Keywords: checkpoint, context, long chat, growth budget, agContext, compact, heavy turn, fresh session, stale session
 
-Trigger sentence (core): about 20+ turns with heavy tool output, or right after a milestone, write the baton and recommend a fresh chat. Claude Code and Codex compact the conversation natively; the baton (`.agents/STATE.md`) carries cross-tool handoff and decision notes carry the why.
+Trigger sentence (core): about 20+ turns with heavy tool output, or right after a milestone, the brain writes the baton and hands off to a fresh brain session on the same model itself (otherwise recommend a fresh chat). Claude Code and Codex compact the conversation natively; the baton (`.agents/STATE.md`) carries cross-tool handoff and decision notes carry the why.
 
 - **Size the task first.** A task whose reading won't fit comfortably in one chat: split it, or send the reading to subagents (their reads stay out of the main chat).
 - **No native compaction (Antigravity)**: after each finished task run `node ~/.agents/tools/agContext.mjs` (measured prompt size from the chat store vs this project's growth budget) and checkpoint when it prints `checkpoint`. Store unreadable (it says so): checkpoint after 3 heavy turns (a turn that read 300+ lines or got a big tool output).
