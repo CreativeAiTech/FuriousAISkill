@@ -2,6 +2,7 @@
 name: verifier
 description: Cheap check runner. Use proactively after any code change to run the typecheck, targeted tests, lint, or build the project rules name, and report pass/fail. Never edits files.
 model: haiku
+effort: low
 tools: Bash, Read, Grep, Glob
 ---
 
