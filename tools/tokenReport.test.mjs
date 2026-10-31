@@ -33,7 +33,7 @@ const blob = (field, value) => {
 const number = (field, value) => Buffer.concat([varint(field * 8), varint(value)]);
 
 // All stores and their workspace URIs are synthetic and fixture-local.
-function antigravityDb(root, project, name, usage, model = "gemini-3.8-flash") {
+function antigravityDb(root, project, name, usage, model = "gemini-3.8-flash", reqs = 1) {
   const dir = path.join(root, ".gemini", "antigravity", "conversations");
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, name + ".db"), db = new DatabaseSync(file);
@@ -42,7 +42,7 @@ function antigravityDb(root, project, name, usage, model = "gemini-3.8-flash") {
     db.prepare("INSERT INTO trajectory_metadata_blob VALUES (?, ?)").run("main", blob(1, blob(1, pathToFileURL(project).href)));
     if (usage) {
       const counters = Buffer.concat(Object.entries(usage).map(([field, value]) => number(Number(field), value)));
-      db.prepare("INSERT INTO gen_metadata VALUES (?, ?)").run(1, blob(1, Buffer.concat([blob(19, model), blob(4, counters)])));
+      for (let i = 1; i <= reqs; i++) db.prepare("INSERT INTO gen_metadata VALUES (?, ?)").run(i, blob(1, Buffer.concat([blob(19, model), blob(4, counters)])));
     }
   } finally { db.close(); }
   return file;
@@ -348,4 +348,57 @@ test("routing outcomes attribute each verifier to the worker whose command it re
   const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
   assert.ok(report.includes("| sonnet | 1 | 1 | 0 | n=1, collecting (need 10) | 1 | 1 |"), report);
   assert.ok(report.includes("| opus | 1 | 1 | 0 | n=1, collecting (need 10) | 1 | 0 |"), report);
+});
+
+// RPT-AGT-001: monolithic session heuristic (5+ distinct edited files, no implementation spawn; bookkeeping paths excluded)
+test("monolithic sessions flag multi-file edits without implementation spawns", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-mono-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  const claudeDir = path.join(root, ".claude", "projects", project.replace(/[^A-Za-z0-9]/g, "-"));
+  fs.mkdirSync(claudeDir, { recursive: true }); fs.mkdirSync(path.join(codexHome, "sessions"), { recursive: true });
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  const edit = (sid, i, fp, name = "Edit") => ({ type: "assistant", timestamp, message: { id: `${sid}-t${i}`, model: "sonnet", usage: { input_tokens: 1000, output_tokens: 100 }, content: [{ type: "tool_use", id: `${sid}-u${i}`, name, input: { file_path: fp } }] } });
+  const win = p => p.split("/").join(String.fromCharCode(92)); // Windows-style paths exercise the backslash normalization
+  const src = n => Array.from({ length: n }, (_, i) => win(`D:/proj/src/f${i}.ts`));
+  const session = (sid, paths, extra = []) => fs.writeFileSync(path.join(claudeDir, sid + ".jsonl"), [...paths.map((p, i) => edit(sid, i, p)), ...extra].map(r => JSON.stringify(r)).join("\n"));
+  const spawn = { type: "assistant", timestamp, message: { id: "mono-b-spawn", model: "sonnet", usage: { input_tokens: 1000, output_tokens: 100 }, content: [{ type: "tool_use", id: "toolu_M", name: "Agent", input: { subagent_type: "worker", description: "impl", prompt: "do it" } }] } };
+  const result = { type: "user", timestamp, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "toolu_M", content: "ok\n\nGATE: pass x" }] } };
+  session("mono-a-flagged", [...src(4), win("D:/proj/src/f0.ts"), win("D:/proj/src/f4.ts")]); // 5 distinct (one repeat)
+  session("mono-b-delegated", src(5), [spawn, result]);
+  session("mono-c-bookkeeping", [...src(3), win("D:/proj/.agents/backlog/x.md"), win("D:/proj/.agents/STATE.md"), win("C:/u/.claude/projects/p/memory/m.md"), win("C:/tmp/scratchpad/s.mjs")]);
+  const summary = runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+  assert.match(summary, /Monolithic sessions: Claude 1\/3, Antigravity n\/a/);
+  const start = report.indexOf("#### Monolithic sessions"), section = report.slice(start, report.indexOf("\n## ", start));
+  assert.match(section, /at least 5 distinct files/);
+  assert.ok(section.includes("| mono-a-f | sonnet | 5 |"), section);
+  assert.ok(!section.includes("mono-b-d") && !section.includes("mono-c-b"), section);
+});
+
+test("monolithic sessions render the section even with no spawns and none flagged", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-mono-none-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  const claudeDir = path.join(root, ".claude", "projects", project.replace(/[^A-Za-z0-9]/g, "-"));
+  fs.mkdirSync(claudeDir, { recursive: true }); fs.mkdirSync(path.join(codexHome, "sessions"), { recursive: true });
+  const timestamp = new Date(Date.now() - 1000).toISOString();
+  fs.writeFileSync(path.join(claudeDir, "one.jsonl"), JSON.stringify({ type: "assistant", timestamp, message: { id: "t1", model: "sonnet", usage: { input_tokens: 1000, output_tokens: 100 }, content: [{ type: "text", text: "hi" }] } }));
+  const summary = runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+  assert.match(summary, /Monolithic sessions: Claude 0\/1/);
+  assert.match(report, /No Claude Code spawns observed[^\n]*\n+#### Monolithic sessions[\s\S]*None flagged in 1 sessions\./);
+});
+
+test("monolithic sessions flag Antigravity main sessions with many requests and no subagent", t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "token-report-mono-ag-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const project = path.join(root, "project"), codexHome = path.join(root, "codex"), out = path.join(root, "out");
+  antigravityDb(root, project, "busy", { 2: 1000, 3: 100 }, "gemini-3.8-flash", 40);
+  antigravityDb(root, project, "quiet", { 2: 1000, 3: 100 }, "gemini-3.8-flash", 39);
+  const summary = runFixture(root, project, codexHome, out);
+  const report = fs.readFileSync(path.join(out, "token-report.md"), "utf8");
+  assert.match(summary, /Antigravity 1\/2/);
+  assert.ok(report.includes("| busy | gemini-3.8-flash | 40 |"), report);
+  assert.ok(!report.includes("| quiet | gemini-3.8-flash |"), report);
 });
