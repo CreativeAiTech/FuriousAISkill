@@ -28,4 +28,4 @@ Show compact evidence, diffs or links; never echo whole files.
 
 ## 4. Checkpoint and naming
 
-After a milestone or about 20+ heavy turns, write the baton and recommend a fresh chat (Antigravity: when `agContext.mjs` prints `checkpoint`). Once known, name the session `<HHMM>-<ID> <short task>` (local time, ticket ID if any).
+After a milestone or about 20+ heavy turns, write the baton and recommend a fresh chat (Antigravity: when `agContext.mjs` prints `checkpoint`). Once known, name the session `[<RANK>] <ID> <short task>` (rank and ticket ID if any).
