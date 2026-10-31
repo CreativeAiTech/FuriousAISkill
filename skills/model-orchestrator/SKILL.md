@@ -2,7 +2,7 @@
 name: "model-orchestrator"
 description: Manage bounded work in every session, select economical available models and efforts, delegate, verify evidence, and preserve cross-tool handoffs.
 metadata:
-  version: 1.8.0
+  version: 1.9.0
 ---
 
 # Model Orchestrator
@@ -13,7 +13,7 @@ Generic orchestration lives here; projects supply domain risks, verifier command
 
 ## Choose a bounded route
 
-State the actual route briefly, with model/effort where controllable, purpose, scope and stop point. There is no mandatory scout → brain → worker → verifier chain. For one task, a substantive phase (research, implement, test) may run in its own subagent so the manager keeps receipts and diffs, not raw tool output; batch small phases, or phases that need the same context, into one worker. The manager reads only to coordinate and spot-check: a few targeted reads, never a full-file or multi-file discovery pass, never the edit itself. Discovery, implementation and checks go to delegates chosen from the models and efforts actually available; "the files are small" or "cheaper than a delegate" is not an exception.
+State the actual route briefly, with model/effort where controllable, purpose, scope and stop point. There is no mandatory scout → brain → worker → verifier chain. For one task, a substantive phase (research, implement, test) may run in its own subagent so the manager keeps receipts and diffs, not raw tool output; batch small phases, or phases that need the same context, into one worker. The manager reads only to coordinate and spot-check: a few targeted reads, never a full-file or multi-file discovery pass, never the edit itself. Discovery, implementation and checks go to delegates chosen from the models and efforts actually available; "the files are small" or "cheaper than a delegate" is not an exception. Hand off before the chat grows large: from the first tool-heavy step, delegate and keep only conclusions in the manager.
 
 The route is the same in every tool, model and effort. Where the tool cannot spawn delegates, the manager still separates the phases. It either hands the substantive part to a persistent ticket or handoff for an adequate cheaper agent, or executes the bounded part itself. Either way it never reviews a diff it authored; that diff goes to a different author (a delegate, a sibling chat, or a queued `needs-review` ticket). State which case applies in the route statement.
 
@@ -33,7 +33,9 @@ Read [model-economics.md](references/model-economics.md) for prices/task selecti
 
 Native helpers stay under the parent's ticket; do not create persistent tickets/claims or user-visible chats for each helper. Use [task-spec.template.md](assets/task-spec.template.md): objective, exact owned paths or read-only scope, constraints, acceptance checks, failure evidence, short receipt and stop point. Keep shared-checkout edits disjoint. Use an isolated branch for ready authorized implementation; preserve other agents' work and ownership.
 
-Set explicit call/time/spend limits proportional to the task (for example report back by 30 calls, earlier on a blocker). Do not recursively delegate or escalate without bounds. Same failure twice: stop identical retries; **Escalate to a brain** (§ Qualification and action gates). Scope growth triggers fresh risk/budget triage before additional work. Routine implementation choices within an authorized prepared scope proceed automatically, including on unknown/lower models.
+Set explicit call/time/spend limits proportional to the task (for example report back by 30 calls, earlier on a blocker). Do not recursively delegate or escalate without bounds. In Claude Code a subagent cannot spawn subagents but a separate session can, so a long task that needs its own delegates goes to a session (which may act as a brain and run to completion: delegate, verify, merge, write the baton), not to a subagent. Same failure twice: stop identical retries; **Escalate to a brain** (§ Qualification and action gates). Scope growth triggers fresh risk/budget triage before additional work. Routine implementation choices within an authorized prepared scope proceed automatically, including on unknown/lower models.
+
+The manager gives every follow-up it judges worthy (each actionable review finding included) an owner now, and never ends a turn on a yes/no "should I...?" or an "open items" list: bounded read-only digging goes to a cheap subagent with no ask; a multi-step task of its own goes to a separate session or agent with a complete brief (a linked worktree session it starts itself, at most 3 at once, separate files, merged one at a time; in Claude Code desktop a `start_session` card, one click for the user; in tools without sessions a persistent ticket or handoff); otherwise it decides itself. Ask in prose only one question for a real trade-off, or before a destructive or outward-facing action. One user go-ahead covers the whole batch.
 
 Use project verification commands; report actual outcomes and repair relevant failures within scope. Do not invent successful checks, reviewer dispatch, runtime model identity or approval. Claude Code and Codex compact natively; retain exact objective, decisions, authorization, evidence and next action in the project baton.
 
@@ -47,8 +49,6 @@ High-risk areas include auth/secrets/permissions, money, data loss, persisted fo
 ## Review and integration
 
 Compare the current diff and verification evidence against acceptance requirements. Independence means a different author, whatever the tool. Default route: delegate research, rule on what it surfaces, delegate the edit and checks, then review the child's diff yourself; that review is independent. Before integrating a child's `GATE: pass <command>`, spawn `verifier` with that exact command at the reviewed revision; its GATE, not the child's, decides integration. Spawn a separate higher-tier reviewer only when (a) you authored the diff in a critical area, or (b) your rank is not qualified for the decision. Auditing another agent's closed work is a separate gate (see the project's handoff rules) and does not apply to reviewing your own child's diff. A separate reviewer may be a child/sibling or shared manager if it did not author those edits, receives the current diff, requirements and failure evidence, and has applicable qualification. Record approval against the exact revision (and diff identity for uncommitted changes); changed edits invalidate that approval. A manager cannot self-approve. Preserve explicitly reserved independent external/named-owner reviewer requirements; orchestration does not replace them.
-
-After any review, the brain gives every actionable finding an owner: an in-chat subagent; a linked worktree session it starts itself (at most 3 at once, separate files, merged one at a time); its own decision; or one user question for a real trade-off. One user go-ahead covers the whole batch. A review never ends on an "open items" list.
 
 ### Completion gate (before MR or merge)
 
