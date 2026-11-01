@@ -11,4 +11,4 @@ Keywords: tokens, token report, tokenReport, measure, hygiene, contextHygiene, b
 ## Weekly hygiene check
 - `tools/contextHygiene.mjs` audits what bloats the always-loaded starting context: big or fast-growing rule files, duplicate skills and hooks, a long CONTEXT.md header, oversized BACKLOG/STATE, and the first-turn baseline trend.
 - session-watch runs it at the first startup session in a project, then every 7 days, and shows one summary line. Report: `<project>/.agents/reports/context-hygiene.md` (est. tokens, Top 3 savings).
-- Fixes that turn something off (plugins, connectors, skills, hooks) need the user's yes; never apply them silently.
+- Fixes that turn something off (plugins, connectors, skills, hooks) need the user's yes; never apply them silently. Exception: removing a hook that breaks `overhead.md` (anything but SessionStart/SessionEnd) needs no yes.
