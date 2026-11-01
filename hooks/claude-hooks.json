@@ -122,6 +122,50 @@
           "timeout": 5
         }
       ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(~/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(~/.claude/CLAUDE.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(~/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(~/.claude/CLAUDE.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
     }
   ]
 }
