@@ -52,7 +52,7 @@ Sync writes only under your home directory, makes no network calls itself (opt-i
 | `~/.claude/settings.json` | Replaces only the kit's hook entries (commands under `~/.agents/hooks/`) and re-saves the file as 2-space JSON. Removal is per hook entry, so keep your own hooks in separate entries | Other keys kept |
 | `~/.claude.json` | Only for opt-in features: adds `mcpServers` entries whose command is under `~/.agents/mcp/`, and re-saves the file as 2-space JSON when those entries change | Other servers kept |
 
-The default install registers three hook scripts: `session-watch.cjs` (SessionStart, UserPromptSubmit), `model-check.mjs` (PreToolUse) and `rule-lint.mjs` (PostToolUse). `--policy-only` skips agents, hooks, `settings.json` and MCP. Sync also deletes generated copies whose source is gone (marked skills, rules and agents).
+The default install registers three hook scripts: `session-watch.cjs` (SessionStart, UserPromptSubmit), `model-check.mjs` (PreToolUse on Bash, PowerShell and Agent; spawns node only where `.agents/baton.config.json` exists) and `rule-lint.mjs` (PostToolUse, scoped with the per-hook `if` field to rule files, so it spawns only for them). `--policy-only` skips agents, hooks, `settings.json` and MCP. Sync also deletes generated copies whose source is gone (marked skills, rules and agents).
 
 **Look before you trust it:** `node ~/.agents/sync.mjs --policy-only --target-home <empty folder>` writes into that folder instead of your home, so you can read every file first.
 
