@@ -23,6 +23,10 @@ Why: Etherium decision `.agents/decisions/2026-11-01-hook-cost-lesson.md`. Hooks
 - Measure it: median over 10+ runs, before and after, in the PR. The startup brief is felt by every session.
 - Keep `SessionEnd` short and offline-safe; it runs while the session closes.
 
+## No unmetered automation
+- A new automatic per-action write, push, hook or spawn (start/end work included) ships with a counter in the project's daily registry, so growth shows before it hurts. A project without a registry names where the count is kept in the PR.
+- Automatic work without a counter is incomplete; "it is cheap" is not a reason.
+
 ## Hygiene
 - A daily lint flags any hook other than `SessionStart`/`SessionEnd` in project or global settings.
 - Removing a hook that breaks this rule needs no extra yes; the owner already decided.
