@@ -33,7 +33,7 @@ Decision (Crownspire repo): `.agents/decisions/2026-10-25-lean-rules.md`
 - Plain, terse English. Drop filler. Keep real words.
 - No private abbreviations. No encodings (gzip, base64): they tokenize worse and cannot be read reliably.
 - Cut any line whose removal would not cause a mistake.
-- Do not use a rule file to enforce what a hook can enforce. Rules are advisory; hooks are deterministic.
+- Do not use a rule file to enforce what a `permissions.deny` rule or the acting tool can enforce. Rules are advisory; deny rules and in-tool checks are deterministic. Never add a per-call hook for it (`overhead.md`).
 
 ## Before saving
 - Search for the same rule elsewhere. If it exists, point to it instead of repeating it.
