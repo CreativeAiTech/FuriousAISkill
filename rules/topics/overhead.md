@@ -19,13 +19,13 @@ Why: Etherium decision `.agents/decisions/2026-11-01-hook-cost-lesson.md`. Hooks
 3. **Once at `SessionStart`** for a notice (role, model, brief), or at `SessionEnd` for bookkeeping (baton, log).
 4. **Nowhere**: if neither a deny rule nor the acting tool can hold it, drop it and keep the rule text. A written rule costs nothing per call.
 
-## No unmetered automation
-- Any new automatic per-action write, push, hook or spawn (start/end work included) ships in the same change with a counter in the project's daily cost trend registry, so growth shows before it hurts. Etherium: add the counter to `tools/costRadar.mjs` (daily line in `.agents/reports/metrics.jsonl`, WKF-190); a project without a registry names where the count is kept in the PR.
-- A change that adds automatic work and no counter is incomplete; "it is cheap" is not a reason.
-
 ## Before adding start/end work
 - Measure it: median over 10+ runs, before and after, in the PR. The startup brief is felt by every session.
 - Keep `SessionEnd` short and offline-safe; it runs while the session closes.
+
+## No unmetered automation
+- A new automatic per-action write, push, hook or spawn (start/end work included) ships with a counter in the project's daily registry, so growth shows before it hurts. A project without a registry names where the count is kept in the PR.
+- Automatic work without a counter is incomplete; "it is cheap" is not a reason.
 
 ## Hygiene
 - A daily lint flags any hook other than `SessionStart`/`SessionEnd` in project or global settings.
