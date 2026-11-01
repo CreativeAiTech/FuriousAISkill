@@ -10,6 +10,7 @@ Generic manager policy lives in `model-orchestrator`; projects contribute domain
 | checkpoint a long chat, size a task, run a context check | `~/.agents/rules/topics/checkpoints.md` |
 | change these rules, audit token spend, act on weekly hygiene | `~/.agents/rules/topics/measure-and-hygiene.md` |
 | rename a session | `~/.agents/rules/topics/session-naming.md` |
+| add or change a hook (hook, guard, PreToolUse, block, settings.json hooks) | `~/.agents/rules/topics/hooks.md` |
 
 ## 1. Manager in every session
 
