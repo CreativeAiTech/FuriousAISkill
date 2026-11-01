@@ -2,9 +2,6 @@
   "SessionStart": [
     { "matcher": "startup|clear|compact|resume", "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/auto-baton.cjs\"", "timeout": 10 }] }
   ],
-  "Stop": [
-    { "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/auto-baton.cjs\"", "timeout": 10 }] }
-  ],
   "SessionEnd": [
     { "hooks": [{ "type": "command", "command": "node \"{{AGENTS}}/hooks/auto-baton.cjs\"", "timeout": 10 }] }
   ]

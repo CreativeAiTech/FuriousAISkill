@@ -270,6 +270,8 @@ function syncAgents() {
   }
 }
 
+const ALLOWED_HOOK_EVENTS = ["SessionStart", "SessionEnd"];
+
 /** Claude Code hooks: hooks/claude-hooks.json -> hooks in ~/.claude/settings.json (managed entries only) */
 function syncHooks() {
   const manifestFile = path.join(SRC, "hooks", "claude-hooks.json");
@@ -318,6 +320,13 @@ function syncHooks() {
       manifests.push(JSON.parse(read(file).split("{{AGENTS}}").join(agentsPath)));
     } catch (err) {
       report.skipped.push(`${rel(file)} (invalid JSON: ${err.message})`);
+    }
+  }
+  for (const m of manifests) {
+    for (const event of Object.keys(m)) {
+      if (!ALLOWED_HOOK_EVENTS.includes(event)) {
+        throw new Error(`Hook manifest registers "${event}": only ${ALLOWED_HOOK_EVENTS.join(" and ")} are allowed (rules/topics/overhead.md)`);
+      }
     }
   }
   for (const m of manifests) {

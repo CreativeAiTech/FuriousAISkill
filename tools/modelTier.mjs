@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Model tier gate (kit port of Crownspire AGT-36/37). Opt-in per project: `"modelGate": true` in .agents/baton.config.json.
- * Every session starts as manager. baton.mjs and hooks/model-check.mjs report action scope without blocking startup.
+ * Every session starts as manager. baton.mjs reports action scope without blocking startup.
  * Model authority remains a separate exact model/effort evidence check. This file keeps legacy tier APIs and QUOTA.md.
  *
  * Rank table, first found wins: <project>/.agents/model-ranks.json → ~/.agents/model-ranks.json → built-in copy.

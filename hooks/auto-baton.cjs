@@ -2,7 +2,7 @@
 //
 // SessionStart (startup|clear): records a baseline per session (HEAD, dirty files,
 //   newest STATE.md log entry) in ~/.claude/hooks/state/.
-// Stop / SessionEnd: if the session changed files or made commits but the newest
+// SessionEnd: if the session changed files or made commits but the newest
 //   STATE.md log entry is unchanged (no `agentBrief.mjs log`), upserts an `auto`
 //   entry for this session into <project>/.agents/auto-baton.json (gitignored).
 //   The project's brief shows those entries; once a baton is written, this
