@@ -27,7 +27,7 @@ test('rule-lint warns for backslash and forward-slash paths', t => {
   assert.match(fwd.stdout,/rule-lint x\.md:/);
   const back=lint([topic.split(path.sep).join('\\')],root);
   assert.match(back.stdout,/rule-lint x\.md:|skipped/); // on POSIX a backslash path is one odd filename
-  if(path.sep==='\') assert.match(back.stdout,/rule-lint x\.md:/);
+  if(path.sep===String.fromCharCode(92)) assert.match(back.stdout,/rule-lint x\.md:/);
 });
 
 test('rule-lint matches the resolved path and reports skipped non-rule files', t => {
