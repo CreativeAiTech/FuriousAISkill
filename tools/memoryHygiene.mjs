@@ -51,7 +51,10 @@ export function parseMemory(file, text) {
 }
 export function loadMemories(dir) {
   return fs.readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "MEMORY.md" && fs.statSync(path.join(dir, f)).isFile())
-    .sort().map((f) => parseMemory(f, fs.readFileSync(path.join(dir, f), "utf8")));
+    .sort().map((f) => {
+      const p = path.join(dir, f), m = parseMemory(f, fs.readFileSync(p, "utf8"));
+      return m.modified ? m : { ...m, modified: fs.statSync(p).mtime.toISOString().slice(0, 10) }; // no frontmatter date: file mtime
+    });
 }
 const bodyText = (m) => m.lines.slice(m.bodyStart).join("\n");
 
