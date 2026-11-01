@@ -4,17 +4,12 @@
 // SessionStart (startup): refreshes the daily token report (tools/tokenReport.mjs) and the weekly token-hygiene
 //   audit (tools/contextHygiene.mjs), and shows their one-line summaries to the user.
 //
-// Stale session (UserPromptSubmit, once per session): the chat started more than CC_WATCH_MAX_AGE_H hours ago
-//   (default 24). A clear would keep the old worktree, branch and loaded skills, so at the next task boundary the
-//   agent opens a NEW session (desktop start_session, brief "continue") instead of clearing; without that tool it
-//   asks the user for a new chat.
+// Runs only at SessionStart (rules/topics/overhead.md); the per-prompt stale-session notice was removed (WKF-176).
 
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const VERSION = (() => { try { return fs.readFileSync(path.join(__dirname, "..", "VERSION"), "utf8").trim(); } catch { return "dev"; } })();
-const STATE_DIR = path.join(os.homedir(), ".claude", "hooks", "state");
 
 function out(obj) {
   process.stdout.write(JSON.stringify(obj));
@@ -28,49 +23,6 @@ function readStdin() {
     return {};
   }
 }
-
-function loadState(id) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(STATE_DIR, id + ".json"), "utf8"));
-  } catch {
-    return {};
-  }
-}
-
-function saveState(id, s) {
-  try {
-    fs.mkdirSync(STATE_DIR, { recursive: true });
-    fs.writeFileSync(path.join(STATE_DIR, id + ".json"), JSON.stringify(s));
-  } catch {}
-}
-
-// First timestamp in the transcript = when this session started (ms), or 0.
-function sessionStart(transcriptPath) {
-  try {
-    const fd = fs.openSync(transcriptPath, "r");
-    const buf = Buffer.alloc(4096);
-    const n = fs.readSync(fd, buf, 0, buf.length, 0);
-    fs.closeSync(fd);
-    const m = buf.toString("utf8", 0, n).match(/"timestamp":"([^"]+)"/);
-    return m ? Date.parse(m[1]) || 0 : 0;
-  } catch {
-    return 0;
-  }
-}
-
-// Why this session is stale, or "" if it isn't. Age only: a "rules changed since start" check can't tell this
-// chat's own commits from other agents', so it fired falsely in sessions that edit rules (removed 2026-10-26).
-function staleReason(startMs) {
-  if (!startMs) return "";
-  const maxH = Number(process.env.CC_WATCH_MAX_AGE_H) || 24;
-  const ageH = (Date.now() - startMs) / 36e5;
-  return ageH >= maxH ? `this chat started ${Math.floor(ageH)}h ago` : "";
-}
-
-const NEW_SESSION =
-  `New session instead of clear: if you have the start_session tool (load it via ToolSearch if deferred), save first (baton, plus a decision note or backlog item for anything git lacks), ` +
-  `then start one fresh session in this project with initiation "user_asked" (the user's standing ask), context "fresh", a worktree, and the brief "continue" plus one line on what is next; ` +
-  `end the reply with "Opened a fresh session with the latest skills and rules; this one can be archived." Without that tool, tell the user to open a new chat in this folder and type continue (not /clear). `;
 
 // Worktrees share the main checkout's hygiene state.
 function mainRoot(cwd) {
@@ -130,26 +82,6 @@ if (event === "SessionStart") {
     if (msg) result.systemMessage = msg;
   }
   out(result);
-}
-
-if (event !== "UserPromptSubmit" || !input.transcript_path || !input.session_id) out({});
-
-const state = loadState(input.session_id);
-const stale = state.stale || staleReason(sessionStart(input.transcript_path));
-
-if (stale && !state.staleNoted) {
-  saveState(input.session_id, { ...state, stale, staleNoted: true });
-  out({
-    systemMessage: `session-watch: stale session (${stale}). A fresh session will be opened at the next task boundary.`,
-    hookSpecificOutput: {
-      hookEventName: "UserPromptSubmit",
-      additionalContext:
-        `[session-watch v${VERSION}] Stale session: ${stale}. A fresh session loads newer skills and rules and gets a worktree from current main; a clear would keep this old one. ` +
-        `Answer the user's message normally first. If this reply finishes a task, or the user starts a new topic, do this at its end; otherwise do it at the first later reply that does. ` +
-        NEW_SESSION +
-        `Never mid-step, with unsaved work, or with a question to the user still open.`,
-    },
-  });
 }
 
 out({});

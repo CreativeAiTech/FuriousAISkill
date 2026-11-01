@@ -247,7 +247,7 @@ function buildBrief(ctx, agent = "", sections = {}, model = "", fromHook = false
   const out = [];
   const me = agentTag(ctx, agent);
   // Model scope advisory (opt-in): role is universal; authority is action-specific. Claude Code's hook input has no
-  // model; there hooks/model-check.mjs reads it from the transcript at the first tool call instead.
+  // model; check on demand with tools/modelAuthority.mjs (no model hook, rules/topics/overhead.md).
   const gate = Boolean(ctx.cfg.modelGate);
   if (typeof model !== "string") model = "";
   if (gate && model) recordModel(ctx.root, me || "unknown-tool", model, "--model flag", effort);

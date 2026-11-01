@@ -98,31 +98,6 @@ test('existing fallback authorization never turns into repeated startup approval
   assert.match(fallbackWarning('future-model',root,'medium'),/pause only that missing action/);
 });
 
-test('model hook records model but never denies startup; second call is silent', t => {
-  const root=project(t);
-  const hook=fileURLToPath(new URL('../hooks/model-check.mjs',import.meta.url));
-  for(const model of ['gpt-6-luna','gpt-6.1-terra','unknown-model']) {
-    const session=randomUUID();
-    const marker=path.join(os.tmpdir(),`agents-model-${session}`);
-    t.after(()=>fs.rmSync(marker,{force:true}));
-    const transcript=path.join(root,`${session}.jsonl`);
-    fs.writeFileSync(transcript,JSON.stringify({type:'assistant',message:{model}})+'\n');
-    const input=JSON.stringify({session_id:session,cwd:root,transcript_path:transcript});
-    const invoke=()=>spawnSync(process.execPath,[hook],{input,encoding:'utf8',timeout:10000});
-    const first=invoke();
-    assert.equal(first.status,0,first.stderr);
-    const output=JSON.parse(first.stdout).hookSpecificOutput;
-    assert.equal(output.hookEventName,'PreToolUse');
-    assert.equal(output.permissionDecision,undefined);
-    assert.match(output.additionalContext,/MANAGER MODE/);
-    assert.doesNotMatch(first.stdout,/Before ANY work|stop and ask|explicit yes/);
-    assert.equal(readQuota(root).find(r=>r.tool==='claude-code').model,model);
-    const second=invoke();
-    assert.equal(second.status,0,second.stderr);
-    assert.equal(second.stdout,'');
-  }
-});
-
 test('valueAdvisory nudges on overpriced models/efforts with exact % power vs cost multiplier', t => {
   const root=project(t);
   const ctx=makeContext(root,loadConfig(root));
