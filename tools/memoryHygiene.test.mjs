@@ -99,3 +99,96 @@ test("invalid args exit 2; missing memory dir exits 0", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /no memory dir/);
 });
+
+// ---- review fixes (FAS-128)
+import { insideDir, encodeLink } from "./memoryHygiene.mjs";
+const mk = (name, files) => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "memhyg2-")), m = path.join(d, name);
+  for (const [f, t] of Object.entries(files)) w(path.join(m, f), t);
+  return { d, m };
+};
+const fm = (n, desc = "d") => `---\nname: ${n}\ndescription: "${desc}"\nmetadata:\n  type: user\n---\n\nbody\n`;
+const cli = (m, ...a) => spawnSync(process.execPath, [tool, "--memory", m, "--repo", repo, "--store", path.join(root, "store"), ...a], { encoding: "utf8" });
+
+test("insideDir is case-folded on win32 and handles ..", () => {
+  const { d, m } = mk("mem", { "a.md": fm("a") });
+  assert.equal(insideDir(m, path.join(m, "x", "y.md")), true);
+  assert.equal(insideDir(m, m), true);
+  assert.equal(insideDir(m, path.join(d, "mem2", "x.md")), false);
+  assert.equal(insideDir(m, path.join(m, "..", "x.md")), false);
+  if (process.platform === "win32") assert.equal(insideDir(m, path.join(m.toUpperCase(), "x.md")), true);
+});
+
+test("--out / --index-out inside the memory dir exit 2 and nothing is written (also with --fix)", () => {
+  const { m } = mk("mem", { "a.md": fm("a"), "MEMORY.md": "" });
+  const upper = process.platform === "win32" ? m.toUpperCase() : m;
+  for (const flag of ["--out", "--index-out"]) for (const target of [path.join(m, "r.md"), path.join(upper, "r2.md")]) {
+    const r = cli(m, "--fix", flag, target);
+    assert.equal(r.status, 2);
+    assert.equal(fs.existsSync(target), false);
+  }
+  assert.equal(fs.existsSync(path.join(m, ".hygiene-backup")), false);
+  assert.equal(fs.readFileSync(path.join(m, "MEMORY.md"), "utf8"), "");
+});
+
+test("bad --out with --fix has no side effects; --memory as a file exits 2", () => {
+  const { d, m } = mk("mem", { "a.md": fm("a"), "MEMORY.md": "" });
+  assert.equal(cli(m, "--fix", "--out", d).status, 2); // a directory
+  assert.equal(fs.existsSync(path.join(m, ".hygiene-backup")), false);
+  assert.equal(fs.readFileSync(path.join(m, "MEMORY.md"), "utf8"), "");
+  const r = cli(path.join(m, "a.md"));
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /not a directory/);
+});
+
+test("odd filenames: encoded link, no duplicates on a second --fix, CRLF kept, atomic", () => {
+  const files = { "a b (1).md": fm("a b (1)", "spaced"), "p%20q.md": fm("p%20q", ""), "anch.md": fm("anch"), "titled.md": fm("titled"), "angle one.md": fm("angle one"), "paren (x).md": fm("paren (x)"), "MEMORY.md": "- [anch](anch.md#top) — x\r\n- [t](titled.md \"Title\") — x\r\n- [ang](<angle one.md>) — x\r\n- [pp](paren (x).md) — raw parens\r\n" };
+  const { m } = mk("mem", files);
+  const r1 = JSON.parse(cli(m, "--json", "--fix").stdout);
+  assert.deepEqual(r1.fixes.map((x) => x.file).sort(), ["a b (1).md", "p%20q.md"]);
+  const t = fs.readFileSync(path.join(m, "MEMORY.md"), "utf8");
+  assert.ok(t.includes("](a%20b%20%281%29.md) — spaced\r\n"));
+  assert.ok(t.includes("](p%2520q.md)\r\n")); // empty description: no dash
+  assert.ok(!/[^\r]\n/.test(t));
+  assert.equal(encodeLink("a (b).md"), "a%20%28b%29.md");
+  assert.deepEqual(fs.readdirSync(m).filter((f) => f.endsWith(".tmp")), []);
+  const r2 = JSON.parse(cli(m, "--json", "--fix").stdout);
+  assert.deepEqual(r2.fixes, []);
+  assert.equal(fs.readFileSync(path.join(m, "MEMORY.md"), "utf8"), t);
+  assert.equal(r2.findings.filter((f) => f.fixable === undefined && f.check === "index").length, 0);
+});
+
+test("malformed percent link does not crash; unreadable entry is skipped", () => {
+  const { m } = mk("mem", { "a.md": fm("a"), "MEMORY.md": "- [x](bad%zz.md) — x\n- [a](a.md) — a\n" });
+  const r = cli(m, "--json");
+  assert.equal(r.status, 0);
+  assert.ok(JSON.parse(r.stdout).findings.some((f) => /bad%zz\.md/.test(f.evidence)));
+  fs.mkdirSync(path.join(m, "dir.md")); // a directory named *.md is skipped, not fatal
+  assert.equal(cli(m, "--json").status, 0);
+});
+
+test("stale-branch: repo without refs is skipped; other remote names are stripped", () => {
+  const bare = path.join(root, "norefs"); execFileSync("git", ["init", "-q", "-b", "main", bare]);
+  const { m } = mk("mem", { "a.md": fm("a").replace("body", "Etherium uses `master`."), "MEMORY.md": "- [a](a.md) — a\n" });
+  const r = JSON.parse(spawnSync(process.execPath, [tool, "--memory", m, "--repo", bare, "--json"], { encoding: "utf8" }).stdout);
+  assert.equal(r.findings.filter((f) => f.check === "stale-branch").length, 0);
+  // with a commit on main plus a remote named "upstream" holding master, master exists via upstream/master
+  execFileSync("git", ["-C", bare, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"]);
+  execFileSync("git", ["-C", bare, "update-ref", "refs/remotes/upstream/master", "HEAD"]);
+  const r2 = JSON.parse(spawnSync(process.execPath, [tool, "--memory", m, "--repo", bare, "--json"], { encoding: "utf8" }).stdout);
+  assert.equal(r2.findings.filter((f) => f.check === "stale-branch").length, 0);
+});
+
+test("backup dirs never overwrite: same-millisecond stamp gets a suffix", async () => {
+  const { applyFixes, loadMemories, audit } = await import("./memoryHygiene.mjs");
+  const { m } = mk("mem", { "a.md": fm("a"), "b.md": fm("b"), "MEMORY.md": "" });
+  const now = new Date(2026, 0, 2, 3, 4, 5, 6);
+  const run1 = () => { const { findings, mems } = audit({ memory: m, repo, rules: [], store: [] }); return applyFixes(m, mems, findings, now); };
+  assert.equal(run1().length, 2);
+  fs.appendFileSync(path.join(m, "c.md"), fm("c")); // new unlinked file, same stamp
+  assert.equal(run1().length, 1);
+  const dirs = fs.readdirSync(path.join(m, ".hygiene-backup")).filter((x) => x !== "hygiene.log").sort();
+  assert.equal(dirs.length, 2);
+  assert.match(dirs[0], /^20260102-030405006(-1)?$/);
+  assert.ok(loadMemories(m).length === 3);
+});

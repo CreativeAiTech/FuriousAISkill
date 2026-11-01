@@ -42,34 +42,56 @@ export function parseMemory(file, text) {
     if (end < 0) end = 0;
     for (let i = 1; i < end; i++) {
       let m = lines[i].match(/^name:\s*(.*)$/); if (m) { name = unq(m[1]); nameLine = i + 1; }
-      m = lines[i].match(/^\s+type:\s*(\S+)/); if (m) type = unq(m[1]);
-      m = lines[i].match(/^\s+modified:\s*(\d{4}-\d{2}-\d{2})/); if (m) modified = m[1];
+      m = lines[i].match(/^\s*type:\s*(\S+)/); if (m) type = unq(m[1]);
+      m = lines[i].match(/^\s*modified:\s*(\d{4}-\d{2}-\d{2})/); if (m) modified = m[1];
       m = lines[i].match(/^description:\s*(.*)$/); if (m) { description = unq(m[1]); descLine = i + 1; }
     }
   }
   return { file, lines, type, modified, name, description, nameLine, descLine, bodyStart: end ? end + 1 : 0 };
 }
 export function loadMemories(dir) {
-  return fs.readdirSync(dir).filter((f) => f.endsWith(".md") && f !== "MEMORY.md" && fs.statSync(path.join(dir, f)).isFile())
-    .sort().map((f) => {
-      const p = path.join(dir, f), m = parseMemory(f, fs.readFileSync(p, "utf8"));
-      return m.modified ? m : { ...m, modified: fs.statSync(p).mtime.toISOString().slice(0, 10) }; // no frontmatter date: file mtime
-    });
+  const out = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".md") && x !== "MEMORY.md").sort()) {
+    const p = path.join(dir, f);
+    try {
+      const st = fs.statSync(p);
+      if (!st.isFile()) continue;
+      const m = parseMemory(f, fs.readFileSync(p, "utf8"));
+      out.push(m.modified ? m : { ...m, modified: st.mtime.toISOString().slice(0, 10) }); // no frontmatter date: file mtime
+    } catch (e) { console.error(`warning: skipped ${f}: ${e.code || e.message}`); }
+  }
+  return out;
 }
+
+const fold = (x) => (process.platform === "win32" ? x.toLowerCase() : x);
+function realish(p) {
+  let cur = path.resolve(p); const rest = [];
+  while (!fs.existsSync(cur)) { const up = path.dirname(cur); if (up === cur) break; rest.unshift(path.basename(cur)); cur = up; }
+  try { cur = fs.realpathSync(cur); } catch { /* keep */ }
+  return path.join(cur, ...rest);
+}
+// true when p is dir itself or anywhere below it (realpath'd parents, case-folded on win32)
+export function insideDir(dir, p) {
+  const r = path.relative(fold(realish(dir)), fold(realish(p)));
+  return r === "" || (r !== ".." && !r.startsWith(".." + path.sep) && !path.isAbsolute(r));
+}
+const safeDecode = (s) => { try { return decodeURI(s); } catch { return s; } };
+export const encodeLink = (f) => encodeURI(f).replace(/\(/g, "%28").replace(/\)/g, "%29");
 const bodyText = (m) => m.lines.slice(m.bodyStart).join("\n");
 
 // ---- 1. index
 export function checkIndex(dir, mems, indexText) {
   const out = [], idx = (indexText ?? "").split(/\r?\n/), linked = new Set();
   idx.forEach((l, i) => {
-    for (const m of l.matchAll(/\[[^\]]*\]\(([^)\s]+\.md)\)/g)) {
+    for (const m of l.matchAll(/\]\(\s*<?([^)>]*?\.md)(?:#[^)>]*)?>?(?:\s+"[^)]*")?\s*\)/gi)) {
       if (/^[a-z]+:\/\//i.test(m[1])) continue;
-      const target = decodeURI(m[1]); linked.add(path.basename(target));
+      const target = safeDecode(m[1].trim()); linked.add(fold(path.basename(target)));
       if (!fs.existsSync(path.join(dir, target))) out.push(finding("index", "index", "MEMORY.md", i + 1, l, `index links missing file ${target}; remove the line or restore the file (brain)`));
     }
   });
   for (const m of mems) {
-    if (!linked.has(m.file)) out.push(finding("index", "index", m.file, 1, `${m.file} (${m.description || "no description"})`, "append an index line to MEMORY.md (safe-fix --fix)", { fixable: true }));
+    const loose = idx.some((l) => fold(l).includes(fold(m.file)) || fold(l).includes(fold(encodeLink(m.file))));
+    if (!linked.has(fold(m.file)) && !loose) out.push(finding("index", "index", m.file, 1, `${m.file} (${m.description || "no description"})`, "append an index line to MEMORY.md (safe-fix --fix)", { fixable: true }));
     const stem = m.file.replace(/\.md$/, "");
     if (m.name && m.name !== stem) out.push(finding("index", "index", m.file, m.nameLine, `name: ${m.name}`, `frontmatter name differs from filename stem "${stem}"; align one (brain)`));
   }
@@ -80,12 +102,12 @@ export function checkIndex(dir, mems, indexText) {
 export function localBranches(repo) {
   const set = new Set();
   try {
-    for (const args of [["branch", "-r", "--format=%(refname:short)"], ["branch", "--format=%(refname:short)"]]) {
+    for (const [remote, args] of [[true, ["branch", "-r", "--format=%(refname:short)"]], [false, ["branch", "--format=%(refname:short)"]]]) {
       const o = execFileSync("git", ["-C", repo, ...args], { encoding: "utf8", windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
-      for (const l of o.split(/\r?\n/)) { const b = l.trim().replace(/^origin\//, ""); if (b) set.add(b); }
+      for (const l of o.split(/\r?\n/)) { const b = remote ? l.trim().replace(/^[^/]+\//, "") : l.trim(); if (b && b !== "HEAD") set.add(b); }
     }
   } catch { return null; }
-  return set;
+  return set.size ? set : null; // no refs at all: unknown, skip the check
 }
 export function checkStaleBranch(mems, branches) {
   if (!branches) return [];
@@ -175,21 +197,22 @@ export function checkFilenameDrift(mems) {
 }
 
 // ---- 8. retired but routed
+const COMMON = new Set(["this", "that", "it", "work", "which", "they", "these", "those", "one", "was", "has", "had", "not", "also", "then", "plan", "idea", "code"]);
 export function checkRetiredRouted(mems, repo, rules) {
   const out = [], re = /\b(\w+)\s+(?:(?:is|was)\s+)?(cancelled|canceled|retired|dropped|deprecated)\b/i;
   for (const m of mems) m.lines.forEach((l, i) => {
-    const hit = [...l.matchAll(new RegExp(re.source, "gi"))].find((h) => h[1].length >= 3 && /^[A-Z]/.test(h[1]) && !((l.slice(0, h.index).match(/"/g) || []).length % 2)) ||
-      [...l.matchAll(new RegExp(re.source, "gi"))].find((h) => h[1].length >= 3 && fs.existsSync(path.join(repo, ".agents", "rules", h[1].toLowerCase() + ".md")) && !((l.slice(0, h.index).match(/"/g) || []).length % 2));
-    if (!hit) return;
-    const word = hit[1].toLowerCase(), ev = [], hasFile = fs.existsSync(path.join(repo, ".agents", "rules", word + ".md"));
-    if (hasFile) ev.push(`.agents/rules/${word}.md exists`);
-    if (!hasFile && !/^[A-Z]/.test(hit[1])) return; // table rows only for proper names (avoid "work dropped")
-    for (const r of rules) {
-      const rls = r.text.split(/\r?\n/);
-      const ix = rls.findIndex((x) => /^\s*\|/.test(x) && new RegExp(`\\b${escRe(word)}\\b`, "i").test(x));
-      if (ix >= 0) ev.push(`${r.name}:${ix + 1}: ${rls[ix].trim()}`);
+    for (const h of l.matchAll(new RegExp(re.source, "gi"))) {
+      const word = h[1].toLowerCase();
+      if (word.length < 3 || COMMON.has(word) || (l.slice(0, h.index).match(/"/g) || []).length % 2) continue;
+      const ev = [];
+      if (fs.existsSync(path.join(repo, ".agents", "rules", word + ".md"))) ev.push(`.agents/rules/${word}.md exists`);
+      for (const r of rules) {
+        const rls = r.text.split(/\r?\n/);
+        const ix = rls.findIndex((x) => /^\s*\|/.test(x) && new RegExp(`\\b${escRe(word)}\\b`, "i").test(x.split("|")[1] || ""));
+        if (ix >= 0) ev.push(`${r.name}:${ix + 1}: ${rls[ix].trim()}`);
+      }
+      if (ev.length) { out.push(finding("retired-but-routed", "review", m.file, i + 1, `${l.trim()} || ${ev.join(" || ")}`, "memory and routing disagree; brain decides which is stale", {}, h.index)); break; }
     }
-    if (ev.length) out.push(finding("retired-but-routed", "review", m.file, i + 1, `${l.trim()} || ${ev.join(" || ")}`, "memory and routing disagree; brain decides which is stale", {}, hit.index));
   });
   return out;
 }
@@ -207,7 +230,7 @@ export function dirBytes(d) {
 }
 export function collectSizes(repoSlug, extra = [], home = os.homedir()) {
   const root = path.join(home, ".claude", "projects"), items = [];
-  try { for (const e of fs.readdirSync(root, { withFileTypes: true })) if (e.isDirectory() && e.name.startsWith(repoSlug)) items.push({ dir: path.join(root, e.name), bytes: dirBytes(path.join(root, e.name)) }); } catch { /* none */ }
+  try { for (const e of fs.readdirSync(root, { withFileTypes: true })) if (e.isDirectory() && (e.name === repoSlug || e.name.startsWith(repoSlug + "--"))) items.push({ dir: path.join(root, e.name), bytes: dirBytes(path.join(root, e.name)) }); } catch { /* none */ }
   const claude = { total: items.reduce((a, x) => a + x.bytes, 0), dirs: items.length };
   return { severity: "size", claude, items, extra: extra.map((d) => ({ dir: d, bytes: dirBytes(d) })) };
 }
@@ -226,23 +249,31 @@ export function audit({ memory, repo, rules, store = [], home = os.homedir() }) 
   return { findings, sizes, mems };
 }
 
-const stamp = (d) => { const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; };
+const stamp = (d) => { const p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${String(d.getMilliseconds()).padStart(3, "0")}`; };
 export function applyFixes(memory, mems, findings, now = new Date()) {
   const todo = findings.filter((f) => f.fixable);
   if (!todo.length) return [];
-  const bdir = path.join(memory, ".hygiene-backup"), dest = path.join(bdir, stamp(now));
-  fs.mkdirSync(dest, { recursive: true });
-  for (const f of fs.readdirSync(memory)) if (f.endsWith(".md") && fs.statSync(path.join(memory, f)).isFile()) fs.copyFileSync(path.join(memory, f), path.join(dest, f));
+  const bdir = path.join(memory, ".hygiene-backup"), base = path.join(bdir, stamp(now));
+  fs.mkdirSync(bdir, { recursive: true });
+  let dest = base;
+  for (let n = 1; ; n++) {
+    try { fs.mkdirSync(dest); break; } catch (e) { if (e.code !== "EEXIST") throw e; dest = `${base}-${n}`; }
+  }
+  for (const f of fs.readdirSync(memory)) {
+    try { if (f.endsWith(".md") && fs.statSync(path.join(memory, f)).isFile()) fs.copyFileSync(path.join(memory, f), path.join(dest, f)); } catch (e) { console.error(`warning: not backed up ${f}: ${e.code || e.message}`); }
+  }
   const idx = path.join(memory, "MEMORY.md");
   let cur = fs.existsSync(idx) ? fs.readFileSync(idx, "utf8") : "";
-  if (cur && !cur.endsWith("\n")) cur += "\n";
+  const eol = cur.includes("\r\n") ? "\r\n" : "\n";
+  if (cur && !cur.endsWith("\n")) cur += eol;
   const fixes = [];
   for (const f of todo) {
-    const m = mems.find((x) => x.file === f.file);
-    cur += `- [${m.name || m.file.replace(/\.md$/, "")}](${m.file}) — ${m.description.slice(0, 80).trim()}\n`;
+    const m = mems.find((x) => x.file === f.file), d = m.description.slice(0, 80).trim();
+    cur += `- [${m.name || m.file.replace(/\.md$/, "")}](${encodeLink(m.file)})${d ? ` — ${d}` : ""}${eol}`;
     fixes.push({ action: "append-index-line", file: m.file });
   }
-  fs.writeFileSync(idx, cur);
+  const tmp = path.join(memory, `.MEMORY.md.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, cur); fs.renameSync(tmp, idx);
   fs.appendFileSync(path.join(bdir, "hygiene.log"), fixes.map((x) => `${now.toISOString()} ${x.action} ${x.file}\n`).join(""));
   return fixes;
 }
@@ -285,24 +316,35 @@ function parseArgs(argv) {
   return o;
 }
 
+const USAGE = "usage: memoryHygiene.mjs --memory <dir> [--repo <path>] [--rules <f>[,<f>]] [--store <dir>[,<dir>]] [--fix] [--json] [--out <file.md>] [--index-out <file>]";
 export function main(argv) {
+  try { return run(argv); } catch (e) { console.error(`memory hygiene: internal error: ${e && e.stack ? e.stack : e}`); return 1; }
+}
+function run(argv) {
   const o = parseArgs(argv);
-  if (o.error) { console.error(o.error + "\nusage: memoryHygiene.mjs --memory <dir> [--repo <path>] [--rules <f>[,<f>]] [--store <dir>[,<dir>]] [--fix] [--json] [--out <file.md>] [--index-out <file>]"); return 2; }
+  if (o.error) { console.error(o.error + "\n" + USAGE); return 2; }
   const repo = path.resolve(o.repo || process.cwd());
   const memory = path.resolve(o.memory || path.join(os.homedir(), ".claude", "projects", slugOf(repo), "memory"));
   if (!fs.existsSync(memory)) { console.log(`memory hygiene: no memory dir at ${memory}; nothing to audit`); return 0; }
+  if (!fs.statSync(memory).isDirectory()) { console.error(`--memory is not a directory: ${memory}`); return 2; }
+  // validate every output path before any write
+  for (const k of ["out", "index-out"]) {
+    if (!o[k]) continue;
+    const p = path.resolve(o[k]);
+    if (insideDir(memory, p)) { console.error(`--${k} must be outside the memory dir: ${p}`); return 2; }
+    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) { console.error(`--${k} is a directory: ${p}`); return 2; }
+  }
   const rules = (o.rules ? o.rules.split(",") : ["CLAUDE.md", "AGENTS.md"].map((f) => path.join(repo, f))).map((f) => path.resolve(f));
   const store = o.store ? o.store.split(",").map((d) => path.resolve(d)) : [];
   const { findings, sizes, mems } = audit({ memory, repo, rules, store });
   const fixes = o.fix ? applyFixes(memory, mems, findings) : [];
   if (o["index-out"]) {
     const io = path.resolve(o["index-out"]);
-    if (path.dirname(io) === memory || io.startsWith(memory + path.sep)) { console.error("--index-out must be outside the memory dir"); return 2; }
     fs.mkdirSync(path.dirname(io), { recursive: true }); fs.writeFileSync(io, renderIndex(mems, sizes.indexTokens));
   }
   const clean = findings.map(({ fixable, ...f }) => f);
   const text = o.json ? JSON.stringify({ findings: clean, fixes, sizes }, null, 2) + "\n" : renderReport(clean, fixes, sizes);
-  if (o.out) { fs.mkdirSync(path.dirname(path.resolve(o.out)), { recursive: true }); fs.writeFileSync(o.out, text); } else process.stdout.write(text);
+  if (o.out) { const p = path.resolve(o.out); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, text); } else process.stdout.write(text);
   return 0;
 }
 
