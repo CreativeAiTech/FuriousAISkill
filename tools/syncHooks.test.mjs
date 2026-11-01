@@ -47,5 +47,5 @@ test('sync refuses a manifest that registers any other event', t => {
   const r=sync(kit,home);
   assert.notEqual(r.status,0);
   assert.match(r.stderr,/overhead\.md/);
-  assert.equal(fs.existsSync(path.join(home,'.claude/settings.json')),false);
+  assert.equal(fs.existsSync(path.join(home,'.claude')),false);
 });

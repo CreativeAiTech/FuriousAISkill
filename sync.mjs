@@ -272,6 +272,21 @@ function syncAgents() {
 
 const ALLOWED_HOOK_EVENTS = ["SessionStart", "SessionEnd"];
 
+/** Fail early (before any write) when a hook manifest registers an event other than SessionStart/SessionEnd. */
+function validateHookManifests() {
+  const files = [path.join(SRC, "hooks", "claude-hooks.json"), ...[...ENABLED].map((n) => path.join(EXPERIMENTAL_HOOKS, `${n}.json`))];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    let m;
+    try { m = JSON.parse(read(file)); } catch { continue; } // invalid JSON is reported by syncHooks
+    for (const event of Object.keys(m || {})) {
+      if (!ALLOWED_HOOK_EVENTS.includes(event)) {
+        throw new Error(`Hook manifest ${rel(file)} registers "${event}": only ${ALLOWED_HOOK_EVENTS.join(" and ")} are allowed (rules/topics/overhead.md)`);
+      }
+    }
+  }
+}
+
 /** Claude Code hooks: hooks/claude-hooks.json -> hooks in ~/.claude/settings.json (managed entries only) */
 function syncHooks() {
   const manifestFile = path.join(SRC, "hooks", "claude-hooks.json");
@@ -404,6 +419,7 @@ function syncMcp() {
   report.written.push(`${rel(claudeJson)} (mcpServers)`);
 }
 
+if (!POLICY_ONLY) validateHookManifests(); // refuse before anything is written
 syncSkills();
 syncRules();
 if (!POLICY_ONLY) {
