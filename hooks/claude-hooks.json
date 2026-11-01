@@ -24,11 +24,11 @@
   ],
   "PreToolUse": [
     {
-      "matcher": "Bash|PowerShell|Edit|Write|NotebookEdit|Agent",
+      "matcher": "Bash|PowerShell|Agent",
       "hooks": [
         {
           "type": "command",
-          "command": "node \"{{AGENTS}}/hooks/model-check.mjs\"",
+          "command": "[ -f \"$CLAUDE_PROJECT_DIR/.agents/baton.config.json\" ] && node \"{{AGENTS}}/hooks/model-check.mjs\" || true",
           "timeout": 10
         }
       ]
@@ -36,10 +36,132 @@
   ],
   "PostToolUse": [
     {
-      "matcher": "Edit|Write|MultiEdit",
+      "matcher": "Write",
       "hooks": [
         {
           "type": "command",
+          "if": "Write(**/CLAUDE.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(**/AGENTS.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(**/GEMINI.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(**/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(**/CLAUDE.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(**/AGENTS.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(**/GEMINI.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(**/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(~/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Write",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Write(~/.claude/CLAUDE.md)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(~/.agents/rules/**)",
+          "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
+          "timeout": 5
+        }
+      ]
+    },
+    {
+      "matcher": "Edit|MultiEdit",
+      "hooks": [
+        {
+          "type": "command",
+          "if": "Edit(~/.claude/CLAUDE.md)",
           "command": "node \"{{AGENTS}}/hooks/rule-lint.mjs\"",
           "timeout": 5
         }
